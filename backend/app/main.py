@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from .database import DATABASE_URL, Base, SessionLocal, engine
 from .models import Project, SwimLane
+from .routers import epics, project, swimlanes, tasks
 
 DEFAULT_SWIMLANES = [
     ("Backlog", False),
@@ -75,6 +76,9 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# TODO: routers mounted here by Phase 1B (project, swimlanes, epics, tasks, ...)
+app.include_router(project.router)
+app.include_router(swimlanes.router)
+app.include_router(epics.router)
+app.include_router(tasks.router)
 
 # TODO: mount StaticFiles at backend/static once frontend is built (Phase 2)
