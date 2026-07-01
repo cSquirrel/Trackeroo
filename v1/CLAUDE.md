@@ -1,17 +1,6 @@
 # Trackeroo
 
-> **v1 implementation.** This file covers the current (v1) implementation. All paths below are relative to `v1/` — `cd` into `v1/` before running any commands here.
-
-A lightweight, self-hosted project/task tracker: one instance manages one project, with epics → tasks, dependencies, blockers, comments/annotations, and links to PRs/Slack threads. Ships as a single Docker image. An MCP server lets AI agents CRUD tasks directly.
-
-## Project Layout
-
-```
-backend/    FastAPI + SQLAlchemy + SQLite REST API
-frontend/   Svelte + Vite kanban web UI
-mcp/        Python MCP server (stdio), thin HTTP client of the backend API
-docs/       openapi.json — the generated, canonical REST contract; api-contract.md — conventions/business rules OpenAPI can't express
-```
+> **v1 implementation.** This file covers conventions specific to the current (v1) implementation — not the product overview, quickstart, or command reference, which live in `README.md`. All paths below are relative to `v1/` — `cd` into `v1/` before running any commands here.
 
 ## Stack
 
@@ -28,14 +17,6 @@ docs/       openapi.json — the generated, canonical REST contract; api-contrac
 - Keep dependencies minimal in every subproject — this is meant to stay a lightweight, easy-to-self-host tool, not a framework showcase.
 - Static frontend build (`frontend/dist`) is served by the backend at `/` in the packaged Docker image (`backend/static/`); `/api/*` is the only other route surface.
 
-## Testing
+## Testing & running locally
 
-- Backend: `cd backend && pytest --cov=app --cov-report=term-missing`
-- Frontend: `cd frontend && npm run test` (Vitest + @testing-library/svelte)
-- E2E: Playwright suite (see `docs/` once Phase 3 lands) drives the built Docker stack end-to-end; a `@smoke` subset gates PRs, the full suite gates releases.
-- MCP: integration suite exercises all MCP tools against a live backend instance.
-- CI: `.github/workflows/ci.yml` runs backend/frontend/MCP/E2E-smoke on every PR and push to `main`; the full E2E regression runs on push to `main` and on-demand via `workflow_dispatch`. See root `README.md`'s "CI" section.
-
-## Running Locally
-
-See root `README.md` for the Docker quickstart. For local dev without Docker: run `backend` with `uvicorn app.main:app --reload` (from `backend/`, with its venv active) and `frontend` with `npm run dev` (from `frontend/`, pointing `VITE_API_BASE_URL` at the backend).
+See `README.md`'s "Testing", "Local development", and "CI" sections for exact commands — this file covers conventions only, not command reference.

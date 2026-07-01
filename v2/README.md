@@ -2,7 +2,7 @@
 
 > **v2 implementation.** This is the Tauri desktop-app implementation of Trackeroo. Treat `v2/` as your working directory when working on it. See the repo-root `README.md` for how versions are organized.
 
-A lightweight, self-hosted task tracker for a single project: epics → tasks, configurable kanban swim lanes, dependencies, blockers, comments/annotations, and links to PRs or Slack threads — plus an MCP server so AI agents can create and update tasks directly. v2 packages this as a native macOS desktop app instead of a self-hosted web service, since the target use case is a single user on a single machine with no remote access ever needed (see `/Users/ciukes/dev/Trackeroo/ELECTRON_APP.md` for the full rationale).
+A lightweight, self-hosted task tracker for a single project: epics → tasks, configurable kanban swim lanes, dependencies, blockers, comments/annotations, and links to PRs or Slack threads — plus an MCP server so AI agents can create and update tasks directly. v2 packages this as a native macOS desktop app instead of a self-hosted web service, since the target use case is a single user on a single machine with no remote access ever needed.
 
 ## Quickstart
 
@@ -83,7 +83,7 @@ src-tauri/   Rust shell: spawns/health-checks/kills the backend sidecar, hosts t
 
 ## Known gotchas
 
-- **Cold-start race**: the webview starts fetching before the sidecar is guaranteed to be listening. The release build's PyInstaller sidecar has real self-extraction overhead (~9s measured on this machine). `frontend/src/lib/store.svelte.ts`'s initial load retries for up to 30s before showing an error — this isn't defensive boilerplate, it's fixing a real bug that was verified against a cold launch of the actual `.app`. Don't remove it without an equivalent guard.
+- **Cold-start delay**: the webview starts fetching before the sidecar is guaranteed to be listening. The release build's PyInstaller sidecar has real self-extraction overhead (~9s measured on this machine), so the app briefly shows a loading state before the board appears — this is expected, not a bug (see `CLAUDE.md` for the fix if you're modifying the frontend).
 - **Unsigned build**: the `.app`/`.dmg` are ad-hoc signed only (no Apple Developer signing identity configured). macOS Gatekeeper will warn on first launch — right-click → Open, or allow via System Settings → Privacy & Security.
 - **Sidecar binary naming**: must exactly match Tauri's `<name>-<target-triple>` convention — currently `trackeroo-backend-aarch64-apple-darwin` for Apple Silicon. See `src-tauri/tauri.conf.json`'s `bundle.externalBin`.
 

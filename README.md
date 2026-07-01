@@ -5,7 +5,7 @@ This repository holds versioned implementations of **Trackeroo**, a lightweight,
 ## Implementations
 
 - **[`v1/`](v1/README.md) — web app.** FastAPI + Svelte + SQLite, self-hosted via `docker compose up`, accessed through a browser. Complete, tested, fully working.
-- **[`v2/`](v2/README.md) — Tauri desktop app.** A native macOS app wrapping the same backend as a bundled sidecar process, no Docker or browser involved. The active development target: the confirmed use case is a single user on a single machine with no remote access ever needed, which fits a native app better than a self-hosted server (see `/Users/ciukes/dev/Trackeroo/ELECTRON_APP.md`, outside this repo, for the full rationale).
+- **[`v2/`](v2/README.md) — Tauri desktop app.** A native macOS app wrapping the same backend as a bundled sidecar process, no Docker or browser involved. The active development target: the confirmed use case is a single user on a single machine with no remote access ever needed, which fits a native app better than a self-hosted server.
 
 Each version is self-contained under its own top-level folder — its own backend/frontend/mcp copies, its own README and CLAUDE.md. Nothing is shared between them at the code level; a fix in one doesn't automatically apply to the other.
 

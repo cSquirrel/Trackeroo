@@ -1,17 +1,6 @@
 # Trackeroo (v2 — Tauri desktop app)
 
-> **v2 implementation.** This file covers the Tauri desktop-app implementation. All paths below are relative to `v2/` — `cd` into `v2/` before running any commands here.
-
-A lightweight, self-hosted project/task tracker: one instance manages one project, with epics → tasks, dependencies, blockers, comments/annotations, and links to PRs/Slack threads. v2 packages this as a native macOS desktop app (Tauri) instead of a Docker-hosted web service — the confirmed use case is single-user, single-machine, no remote access ever, which fits a native app better than a self-hosted server.
-
-## Project Layout
-
-```
-backend/     FastAPI + SQLite REST API — a copy of v1/backend, fixed port 8787
-frontend/    Svelte + Vite UI — a copy of v1/frontend, adapted for the Tauri webview
-mcp/         MCP server — point TRACKEROO_API_URL at http://localhost:8787
-src-tauri/   Rust shell: spawns/health-checks/kills the backend sidecar, hosts the webview
-```
+> **v2 implementation.** This file covers conventions specific to the Tauri desktop-app implementation — not the product overview, quickstart, or repo layout, which live in `README.md`. All paths below are relative to `v2/` — `cd` into `v2/` before running any commands here.
 
 ## Stack
 
@@ -29,11 +18,6 @@ src-tauri/   Rust shell: spawns/health-checks/kills the backend sidecar, hosts t
 - **Backend kill logic must target the whole process group.** The release sidecar binary is a PyInstaller bootloader that forks the real Python server as a child process — killing only the direct child (the bootloader) orphans the server and leaves port `8787` held. `kill_backend()` in `lib.rs` sends `SIGKILL` to the negated PID (the process group) for exactly this reason; the backend is spawned with `process_group(0)` to make itself a group leader.
 - Sidecar binary naming must exactly match Tauri's `<name>-<target-triple>` convention (currently `trackeroo-backend-aarch64-apple-darwin`) — see `bundle.externalBin` in `src-tauri/tauri.conf.json`. The compiled binary and PyInstaller build artifacts are gitignored; rebuild them after a fresh clone or backend change (see `README.md`).
 
-## Testing
+## Testing & running locally
 
-- Backend/frontend: same commands as v1 since the code is a copy (`cd backend && pytest --cov=app --cov-report=term-missing`, `cd frontend && npm run test`).
-- No dedicated v2 E2E suite or CI wiring exists yet — v1's `e2e/` and `.github/workflows/ci.yml` do not cover v2 at all. Verify changes manually via `npm run dev`, or by rebuilding and launching the `.app` (a cold-start launch, not just `tauri dev`, is the more representative test — see the cold-start gotcha above).
-
-## Running locally
-
-`npm run dev` for hot-reload dev mode, or `npm run build` then open the produced `.app` for a release-mode check — see `README.md` for the full setup including the one-time backend venv and PyInstaller steps.
+Backend/frontend unit tests use the same commands as v1 since the code is a copy (`cd backend && pytest --cov=app --cov-report=term-missing`, `cd frontend && npm run test`). No dedicated v2 E2E suite or CI wiring exists yet — v1's `e2e/` and `.github/workflows/ci.yml` do not cover v2 at all. Verify changes manually via `npm run dev`, or by rebuilding and launching the `.app` — a cold-start launch, not just `tauri dev`, is the more representative test given the cold-start convention above. See `README.md` for the full dev/build setup including the one-time backend venv and PyInstaller steps.

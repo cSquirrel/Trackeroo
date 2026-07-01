@@ -1,11 +1,8 @@
 # Trackeroo
 
-This repo contains versioned implementations of Trackeroo, each self-contained under its own top-level folder:
+Versioned implementations of Trackeroo — see `README.md` for what each version (`v1/`, `v2/`) is, why both exist, and how to run them. This file covers repo-wide conventions for anyone (or any agent) working in this repo, regardless of which version.
 
-- [`v1/`](v1/) — the Docker/web implementation (FastAPI + Svelte + MCP server, self-hosted via `docker compose`). Complete, tested, fully working.
-- [`v2/`](v2/) — a Tauri desktop app wrapping the same backend as a native sidecar. The active development target: the confirmed use case is single-user, single-machine, no remote access ever, which fits a native app better than a self-hosted server (see `/Users/ciukes/dev/Trackeroo/ELECTRON_APP.md` for the full rationale).
-
-Each version has its own `CLAUDE.md` with detailed conventions (`v1/CLAUDE.md`, `v2/CLAUDE.md` if present) — Claude Code auto-loads the nearest one, so working from inside `v1/` or `v2/` picks up the right instructions on top of this file.
+Each version has its own `CLAUDE.md` with implementation-specific conventions (`v1/CLAUDE.md`, `v2/CLAUDE.md`) — Claude Code auto-loads the nearest one, so working from inside `v1/` or `v2/` picks up the right instructions on top of this file.
 
 ## Worktrees are mandatory for any work
 
@@ -24,5 +21,4 @@ cd worktrees/<short-task-name>
 
 ## Repo layout notes
 
-- `.github/workflows/` stays at the repo root because GitHub only discovers workflows there; job paths inside are prefixed per-version (e.g. `v1/backend`).
-- `AGENT_VISIBILITY.md` and `ELECTRON_APP.md` (in the parent `Trackeroo/` folder, one level above this repo) are untracked planning docs — not part of this repo.
+- `.github/workflows/` stays at the repo root because GitHub only discovers workflows there; job paths inside are prefixed per-version (e.g. `v1/backend`) — v2 has no CI wiring yet.
