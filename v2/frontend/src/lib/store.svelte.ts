@@ -37,19 +37,34 @@ class Store {
   async loadAll() {
     this.loading = true;
     this.error = null;
-    try {
-      const [project, epics, tasks] = await Promise.all([
-        api.getProject(),
-        api.listEpics(),
-        api.listTasks(),
-      ]);
-      this.project = project;
-      this.epics = epics;
-      this.tasks = tasks;
-    } catch (e) {
-      this.error = e instanceof Error ? e.message : String(e);
-    } finally {
-      this.loading = false;
+    // The webview starts fetching before the Tauri sidecar backend is
+    // guaranteed to be listening yet (they start concurrently at app
+    // launch). The release build's PyInstaller-bundled sidecar has real
+    // self-extraction overhead on cold start (measured ~9s on this
+    // machine), so retry generously instead of surfacing a permanent
+    // "Load failed" after a transient connection failure.
+    const maxAttempts = 60;
+    const delayMs = 500;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const [project, epics, tasks] = await Promise.all([
+          api.getProject(),
+          api.listEpics(),
+          api.listTasks(),
+        ]);
+        this.project = project;
+        this.epics = epics;
+        this.tasks = tasks;
+        this.loading = false;
+        return;
+      } catch (e) {
+        if (attempt === maxAttempts) {
+          this.error = e instanceof Error ? e.message : String(e);
+          this.loading = false;
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
     }
   }
 
