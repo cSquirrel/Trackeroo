@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as api from "./api";
+  import { describeDependencyError } from "./errors";
   import EpicTag from "./EpicTag.svelte";
   import { store } from "./store.svelte";
   import type {
@@ -174,7 +175,7 @@
       await load();
       onchanged();
     } catch (e) {
-      fail(e);
+      localError = describeDependencyError(e);
     }
   }
 
