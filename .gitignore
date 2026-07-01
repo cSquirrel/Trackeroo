@@ -29,3 +29,7 @@ data/
 
 # macOS
 .DS_Store
+
+# Git worktrees (created via `git worktree add worktrees/<name> -b <branch>`)
+/worktrees/*
+!/worktrees/.gitkeep
