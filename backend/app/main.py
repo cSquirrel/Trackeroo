@@ -3,8 +3,11 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
 from .database import DATABASE_URL, Base, SessionLocal, engine
@@ -89,4 +92,9 @@ app.include_router(swimlanes.router)
 app.include_router(epics.router)
 app.include_router(tasks.router)
 
-# TODO: mount StaticFiles at backend/static once frontend is built (Phase 2)
+# Serve the built frontend (copied to backend/static/ in the Docker image) at /.
+# Mounted after the API routers so /api/* keeps priority; skipped silently when
+# the directory is absent (local dev without a frontend build).
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+if _STATIC_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")

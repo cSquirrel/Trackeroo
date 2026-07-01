@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.coverage
+.pytest_cache/
+
+# Node / frontend build
+node_modules/
+frontend/dist/
+
+# Local data (SQLite volume)
+data/
+
+# Environment
+.env
