@@ -113,7 +113,7 @@ def list_tasks(epic_id: int | None = None, swimlane_id: int | None = None) -> st
 
 @mcp.tool()
 def get_task(task_id: int) -> str:
-    """Get full task detail: fields plus comments, links, and dependency_ids."""
+    """Get full task detail: fields plus comments, links, and dependencies."""
     return _dump(_request("GET", f"/api/tasks/{task_id}"))
 
 

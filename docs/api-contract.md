@@ -232,7 +232,7 @@ Request:
 Response `201`: created Task summary object.
 
 ### GET /api/tasks/{id}
-Full detail: task fields plus nested `comments`, `links`, and `dependency_ids`.
+Full detail: task fields plus nested `comments`, `links`, and `dependencies`.
 
 Response `200`:
 ```json
@@ -246,10 +246,13 @@ Response `200`:
   "links": [
     {"id": 2, "task_id": 10, "url": "https://github.com/x/y/pull/1", "label": "PR #1", "link_type": "pr"}
   ],
-  "dependency_ids": [7, 8]
+  "dependencies": [
+    {"id": 4, "task_id": 10, "depends_on_task_id": 7},
+    {"id": 5, "task_id": 10, "depends_on_task_id": 8}
+  ]
 }
 ```
-`dependency_ids` is the list of `depends_on_task_id` values for this task.
+`dependencies` is the full list of `TaskDependency` rows for this task (each with its own `id`, needed to call `DELETE /api/tasks/{id}/dependencies/{dependency_id}`) — not just the `depends_on_task_id` values.
 `404` if not found.
 
 ### PATCH /api/tasks/{id}

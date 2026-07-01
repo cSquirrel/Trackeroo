@@ -62,7 +62,9 @@ def create_task(payload: TaskCreate, db: Session = Depends(get_db)) -> Task:
 def get_task(task_id: int, db: Session = Depends(get_db)) -> TaskDetail:
     task = _get_task(db, task_id)
     detail = TaskDetail.model_validate(task)
-    detail.dependency_ids = [d.depends_on_task_id for d in task.dependencies]
+    detail.dependencies = [
+        TaskDependencyOut.model_validate(d) for d in task.dependencies
+    ]
     return detail
 
 

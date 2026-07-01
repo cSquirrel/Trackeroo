@@ -211,11 +211,11 @@ class TaskOut(BaseModel):
 
 
 class TaskDetail(TaskOut):
-    """Full representation nesting comments, links, and dependency ids."""
+    """Full representation nesting comments, links, and dependencies."""
 
     comments: list[CommentOut] = []
     links: list[TaskLinkOut] = []
-    dependency_ids: list[int] = []
+    dependencies: list[TaskDependencyOut] = []
 
 
 # ---------------------------------------------------------------------------

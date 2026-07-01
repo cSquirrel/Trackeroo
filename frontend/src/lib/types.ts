@@ -56,16 +56,16 @@ export interface Comment {
   created_at: string;
 }
 
-export interface TaskDetail extends Task {
-  comments: Comment[];
-  links: TaskLink[];
-  dependency_ids: number[];
-}
-
 export interface TaskDependency {
   id: number;
   task_id: number;
   depends_on_task_id: number;
+}
+
+export interface TaskDetail extends Task {
+  comments: Comment[];
+  links: TaskLink[];
+  dependencies: TaskDependency[];
 }
 
 export interface TaskMoveResult extends Task {

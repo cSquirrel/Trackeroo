@@ -45,10 +45,6 @@
   // Dependency form
   let dependsOnId = $state<number | "">("");
 
-  // Maps depends_on_task_id -> TaskDependency.id for rows added this session,
-  // so they can be deleted (the detail endpoint only returns depends_on ids).
-  let depRowIds = $state<Record<number, number>>({});
-
   async function load() {
     loading = true;
     localError = null;
@@ -67,7 +63,6 @@
 
   $effect(() => {
     void taskId;
-    depRowIds = {};
     load();
   });
 
@@ -174,8 +169,7 @@
   async function addDependency() {
     if (!detail || dependsOnId === "") return;
     try {
-      const dep = await api.addDependency(detail.id, dependsOnId);
-      depRowIds[dep.depends_on_task_id] = dep.id;
+      await api.addDependency(detail.id, dependsOnId);
       dependsOnId = "";
       await load();
       onchanged();
@@ -184,12 +178,10 @@
     }
   }
 
-  async function removeDependency(dependsOn: number) {
+  async function removeDependency(dependencyId: number) {
     if (!detail) return;
-    const rowId = depRowIds[dependsOn];
-    if (rowId === undefined) return;
     try {
-      await api.removeDependency(detail.id, rowId);
+      await api.removeDependency(detail.id, dependencyId);
       await load();
       onchanged();
     } catch (e) {
@@ -264,31 +256,22 @@
       <!-- Dependencies -->
       <section>
         <h3>Dependencies</h3>
-        {#if detail.dependency_ids.length === 0}
+        {#if detail.dependencies.length === 0}
           <p class="muted">No dependencies.</p>
         {:else}
           <ul class="dep-list">
-            {#each detail.dependency_ids as depId}
-              {@const dt = store.tasks.find((t) => t.id === depId)}
+            {#each detail.dependencies as dep (dep.id)}
+              {@const dt = store.tasks.find((t) => t.id === dep.depends_on_task_id)}
               <li>
                 <span class="dep-status" class:done={isTaskDone(dt)}>
                   {isTaskDone(dt) ? "done" : "open"}
                 </span>
                 <span class="dep-title">
-                  #{depId} {dt ? dt.title : "(unknown task)"}
+                  #{dep.depends_on_task_id} {dt ? dt.title : "(unknown task)"}
                 </span>
-                {#if depRowIds[depId] !== undefined}
-                  <button class="link danger" onclick={() => removeDependency(depId)}>
-                    remove
-                  </button>
-                {:else}
-                  <span
-                    class="muted small"
-                    title="Backend does not expose dependency row ids on load; can only remove deps added in this session."
-                  >
-                    (reload to manage)
-                  </span>
-                {/if}
+                <button class="link danger" onclick={() => removeDependency(dep.id)}>
+                  remove
+                </button>
               </li>
             {/each}
           </ul>

@@ -13,7 +13,7 @@ def test_task_crud_and_detail(client, todo_lane):
     body = detail.json()
     assert body["comments"] == []
     assert body["links"] == []
-    assert body["dependency_ids"] == []
+    assert body["dependencies"] == []
 
     patched = client.patch(f"/api/tasks/{task['id']}", json={"title": "Login v2"})
     assert patched.status_code == 200
@@ -144,11 +144,11 @@ def test_dependency_lifecycle_and_detail(client, todo_lane):
     assert dep_row["depends_on_task_id"] == b["id"]
 
     detail = client.get(f"/api/tasks/{a['id']}").json()
-    assert detail["dependency_ids"] == [b["id"]]
+    assert detail["dependencies"] == [dep_row]
 
     removed = client.delete(f"/api/tasks/{a['id']}/dependencies/{dep_row['id']}")
     assert removed.status_code == 204
-    assert client.get(f"/api/tasks/{a['id']}").json()["dependency_ids"] == []
+    assert client.get(f"/api/tasks/{a['id']}").json()["dependencies"] == []
 
 
 def test_self_dependency_rejected(client, todo_lane):
