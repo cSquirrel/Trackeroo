@@ -32,6 +32,7 @@ docs/       openapi.json — the generated, canonical REST contract; api-contrac
 - Frontend: `cd frontend && npm run test` (Vitest + @testing-library/svelte)
 - E2E: Playwright suite (see `docs/` once Phase 3 lands) drives the built Docker stack end-to-end; a `@smoke` subset gates PRs, the full suite gates releases.
 - MCP: integration suite exercises all MCP tools against a live backend instance.
+- CI: `.github/workflows/ci.yml` runs backend/frontend/MCP/E2E-smoke on every PR and push to `main`; the full E2E regression runs on push to `main` and on-demand via `workflow_dispatch`. See root `README.md`'s "CI" section.
 
 ## Running Locally
 

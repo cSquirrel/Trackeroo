@@ -100,6 +100,22 @@ The `@smoke` subset (board loads, create task, drag-and-move, add comment) is
 the cheapest high-signal path for a CI pull-request gate; the rest form the full
 regression run.
 
+## CI
+
+GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every
+pull request and on pushes to `main`:
+
+- **On PR and on push to `main`** (in parallel): `backend-tests` (pytest + coverage),
+  `frontend-tests` (`npm run check` → `test` → `build`), `mcp-tests` (integration suite
+  against an isolated Docker stack), and `e2e-smoke` (the fast `@smoke` Playwright subset).
+- **On push to `main` only**: `e2e-full` runs the full Playwright regression suite. It can
+  also be launched on demand from the Actions tab (`workflow_dispatch`) — e.g. before cutting
+  a release.
+
+The Docker-backed jobs (`mcp-tests`, `e2e-smoke`, `e2e-full`) rely on Docker being
+pre-installed on the `ubuntu-latest` runner; each boots and tears down its own isolated
+Compose stack.
+
 ## Versioning
 
 This repo uses git. The `main` branch (this checkout) is the mainline; feature work happens in the sibling `../worktrees/` directory as git worktrees.
