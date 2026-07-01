@@ -7,7 +7,6 @@ __pycache__/
 
 # Node / frontend build
 node_modules/
-frontend/dist/
 
 # Local data (SQLite volume)
 data/

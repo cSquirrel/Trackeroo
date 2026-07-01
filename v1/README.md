@@ -1,0 +1,123 @@
+# Trackeroo
+
+> **v1 implementation.** This is the current (v1) implementation of Trackeroo. Treat `v1/` as your working directory when working on it. See the repo-root `README.md` for how versions are organized.
+
+A lightweight, self-hosted task tracker for a single project: epics → tasks, configurable kanban swim lanes, dependencies, blockers, comments/annotations, and links to PRs or Slack threads — plus an MCP server so AI agents can create and update tasks directly.
+
+## Quickstart (Docker)
+
+```bash
+docker compose up --build
+```
+
+Then open `http://localhost:8000`. The SQLite database is persisted to `./data` on the host via a mounted volume, so your board survives container restarts.
+
+## What you get
+
+- **Web board** — a kanban view with configurable swim lanes (default: Backlog / To Do / In Progress / Review / Done), draggable task cards, epic filtering and color-tagging.
+- **Task detail** — description, comments and annotations, block/unblock with a reason, dependency links to other tasks, and links out to PRs or Slack threads.
+- **Epics** — group related tasks; manage epics from their own view.
+- **Swim lane config** — add, rename, reorder, or remove columns; mark one as the "done" column (used for dependency warnings).
+- **MCP server** — `mcp/` exposes the same task/epic operations as MCP tools so an AI assistant (Claude Code, Claude Desktop, etc.) can manage the board on your behalf. See `mcp/README.md` for the exact config snippet to register it.
+
+## Data model
+
+One project → many epics → many tasks. Tasks can depend on other tasks (advisory — moving a task into the done column with open dependencies warns but doesn't block), can be marked blocked with a reason, and can carry links to PRs/Slack threads plus a comment/annotation thread. Full field-level detail lives in [`docs/api-contract.md`](docs/api-contract.md).
+
+## Repo layout
+
+```
+backend/    FastAPI + SQLite REST API
+frontend/   Svelte + Vite web UI
+mcp/        MCP server (stdio) — thin HTTP client of the backend API
+docs/       API contract (source of truth for backend/frontend/MCP)
+data/       SQLite database file (Docker volume mount, gitignored)
+```
+
+## Local development (without Docker)
+
+Backend:
+```bash
+cd backend
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/uvicorn app.main:app --reload
+```
+
+Frontend:
+```bash
+cd frontend
+npm install
+VITE_API_BASE_URL=http://localhost:8000 npm run dev
+```
+
+MCP server:
+```bash
+cd mcp
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+TRACKEROO_API_URL=http://localhost:8000 .venv/bin/python server.py
+```
+
+## Testing
+
+Unit / component tests (no Docker needed):
+
+```bash
+cd backend && pytest --cov=app --cov-report=term-missing
+cd frontend && npm run test
+```
+
+### End-to-end (Playwright)
+
+The E2E suite in [`e2e/`](e2e/) drives a real browser against the **full Docker
+stack** (FastAPI serving the built Svelte frontend), so it exercises the actual
+`/api` calls and SQLite persistence — not mocks. It covers the core user
+journeys: board load, epic/task creation, drag-to-move persistence,
+comments/annotations, block/unblock, the dependency soft-warning, PR/Slack
+links, and swimlane reconfiguration.
+
+The Playwright global setup boots an isolated stack automatically
+(`docker-compose.e2e.yml`, host port 8001, a dedicated `trackeroo-e2e-data`
+volume that is wiped each run so the seeded board is deterministic) and tears it
+down afterwards. You just need Docker running.
+
+```bash
+cd e2e
+npm install
+npx playwright install chromium   # one-time: download the browser
+
+npm run test:e2e         # full regression suite (boots + tears down the stack)
+npm run test:e2e:smoke   # fast @smoke subset only (CI PR gate)
+```
+
+To run against a stack you booted yourself (skips the automatic boot/teardown):
+
+```bash
+# from the repo root
+docker compose -p trackeroo-e2e -f docker-compose.e2e.yml up -d --build --wait
+cd e2e && E2E_SKIP_DOCKER=1 npx playwright test
+docker compose -p trackeroo-e2e -f docker-compose.e2e.yml down -v
+```
+
+The `@smoke` subset (board loads, create task, drag-and-move, add comment) is
+the cheapest high-signal path for a CI pull-request gate; the rest form the full
+regression run.
+
+## CI
+
+GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every
+pull request and on pushes to `main`:
+
+- **On PR and on push to `main`** (in parallel): `backend-tests` (pytest + coverage),
+  `frontend-tests` (`npm run check` → `test` → `build`), `mcp-tests` (integration suite
+  against an isolated Docker stack), and `e2e-smoke` (the fast `@smoke` Playwright subset).
+- **On push to `main` only**: `e2e-full` runs the full Playwright regression suite. It can
+  also be launched on demand from the Actions tab (`workflow_dispatch`) — e.g. before cutting
+  a release.
+
+The Docker-backed jobs (`mcp-tests`, `e2e-smoke`, `e2e-full`) rely on Docker being
+pre-installed on the `ubuntu-latest` runner; each boots and tears down its own isolated
+Compose stack.
+
+## Versioning
+
+This repo uses git. The `main` branch (this checkout) is the mainline; feature work happens in the sibling `../worktrees/` directory as git worktrees.
