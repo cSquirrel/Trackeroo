@@ -4,9 +4,7 @@
 FROM node:20-alpine AS frontend
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
-# npm install (not ci) because the committed lock omits linux/musl platform
-# optional deps (e.g. the Rollup native binary) needed for the in-container build.
-RUN npm install --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 
