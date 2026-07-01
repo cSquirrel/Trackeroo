@@ -57,12 +57,48 @@ TRACKEROO_API_URL=http://localhost:8000 .venv/bin/python server.py
 
 ## Testing
 
+Unit / component tests (no Docker needed):
+
 ```bash
 cd backend && pytest --cov=app --cov-report=term-missing
 cd frontend && npm run test
 ```
 
-End-to-end (Playwright) and MCP integration suites run against the full Docker stack — see the CI workflow once added.
+### End-to-end (Playwright)
+
+The E2E suite in [`e2e/`](e2e/) drives a real browser against the **full Docker
+stack** (FastAPI serving the built Svelte frontend), so it exercises the actual
+`/api` calls and SQLite persistence — not mocks. It covers the core user
+journeys: board load, epic/task creation, drag-to-move persistence,
+comments/annotations, block/unblock, the dependency soft-warning, PR/Slack
+links, and swimlane reconfiguration.
+
+The Playwright global setup boots an isolated stack automatically
+(`docker-compose.e2e.yml`, host port 8001, a dedicated `trackeroo-e2e-data`
+volume that is wiped each run so the seeded board is deterministic) and tears it
+down afterwards. You just need Docker running.
+
+```bash
+cd e2e
+npm install
+npx playwright install chromium   # one-time: download the browser
+
+npm run test:e2e         # full regression suite (boots + tears down the stack)
+npm run test:e2e:smoke   # fast @smoke subset only (CI PR gate)
+```
+
+To run against a stack you booted yourself (skips the automatic boot/teardown):
+
+```bash
+# from the repo root
+docker compose -p trackeroo-e2e -f docker-compose.e2e.yml up -d --build --wait
+cd e2e && E2E_SKIP_DOCKER=1 npx playwright test
+docker compose -p trackeroo-e2e -f docker-compose.e2e.yml down -v
+```
+
+The `@smoke` subset (board loads, create task, drag-and-move, add comment) is
+the cheapest high-signal path for a CI pull-request gate; the rest form the full
+regression run.
 
 ## Versioning
 

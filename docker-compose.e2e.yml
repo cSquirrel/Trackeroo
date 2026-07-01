@@ -1,0 +1,22 @@
+# Isolated stack for Playwright E2E runs. Boots the same image as
+# docker-compose.yml but on host port 8001 with a dedicated named volume, so
+# E2E runs never touch the real ./data board. Managed automatically by the
+# Playwright global setup/teardown (see e2e/global-setup.ts).
+services:
+  app:
+    build: .
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: sqlite:///./data/trackeroo.db
+    volumes:
+      - trackeroo-e2e-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  trackeroo-e2e-data:
