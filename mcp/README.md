@@ -34,6 +34,25 @@ on stdin/stdout (there is no interactive output — this is expected):
 .venv/bin/python server.py
 ```
 
+## Tests
+
+`tests/` holds an integration suite that exercises every tool end-to-end against
+a real backend. A session-scoped pytest fixture boots the actual Docker Compose
+stack on an isolated port (`8100`) and its own named volume — so it never
+collides with a local dev stack or its data — waits for `/api/health`, runs the
+tools through the MCP SDK's in-memory client session (the same path a real MCP
+client uses), and tears the stack down (`docker compose down -v`) afterwards,
+even on failure.
+
+Requires Docker to be running. From the `mcp/` directory:
+
+```bash
+pip install -r requirements.txt -r tests/requirements.txt
+pytest -q
+```
+
+The first run builds the image (a few minutes); later runs reuse the cache.
+
 ## Tools
 
 - `get_project` — project config + swimlanes (call first to discover swimlane ids)
