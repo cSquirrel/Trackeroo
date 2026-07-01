@@ -24,9 +24,21 @@ import type {
   TaskUpdate,
 } from "./types";
 
-const BASE_URL = (
+// The backend port is chosen dynamically per process and only known at runtime
+// (the Tauri shell picks a free port when a project is opened), so the base URL
+// is a mutable module value configured via setApiBaseUrl() before any data
+// loads. The env default is only a fallback for non-Tauri contexts (e.g. tests).
+let baseUrl = (
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8787/api"
 ).replace(/\/$/, "");
+
+export function setApiBaseUrl(url: string): void {
+  baseUrl = url.replace(/\/$/, "");
+}
+
+export function getApiBaseUrl(): string {
+  return baseUrl;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -45,7 +57,7 @@ async function request<T>(
   body?: unknown,
   query?: Record<string, string | number | undefined>,
 ): Promise<T> {
-  let url = `${BASE_URL}${path}`;
+  let url = `${baseUrl}${path}`;
   if (query) {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query)) {

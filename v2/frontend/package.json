@@ -28,6 +28,8 @@
     "vitest": "^4.1.9"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
     "svelte-dnd-action": "^0.9.70"
   }
 }

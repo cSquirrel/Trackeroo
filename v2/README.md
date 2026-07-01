@@ -2,7 +2,9 @@
 
 > **v2 implementation.** This is the Tauri desktop-app implementation of Trackeroo. Treat `v2/` as your working directory when working on it. See the repo-root `README.md` for how versions are organized.
 
-A lightweight, self-hosted task tracker for a single project: epics → tasks, configurable kanban swim lanes, dependencies, blockers, comments/annotations, and links to PRs or Slack threads — plus an MCP server so AI agents can create and update tasks directly. v2 packages this as a native macOS desktop app instead of a self-hosted web service, since the target use case is a single user on a single machine with no remote access ever needed.
+A lightweight task tracker: epics → tasks, configurable kanban swim lanes, dependencies, blockers, comments/annotations, and links to PRs or Slack threads — plus an MCP server so AI agents can create and update tasks directly. v2 packages this as a native macOS desktop app instead of a self-hosted web service, since the target use case is a single user on a single machine with no remote access ever needed.
+
+**Multiple projects, vault-style.** Each project is just a folder that contains a `trackeroo.db` file (one SQLite database = one project). You pick projects the way Obsidian picks vaults: the app opens a **project picker** on every launch, and you can have several projects open at once — each in its own window and its own OS process. Projects are ordinary folders, so you can move, copy, back up, or sync them however you like.
 
 ## Quickstart
 
@@ -32,7 +34,7 @@ npm install
 npm run dev
 ```
 
-This compiles the Rust shell, spawns the backend from its venv on a fixed port (`8787`, distinct from v1's `8000` so both can run at once), and opens a native window once the backend's `/api/health` responds.
+This compiles the Rust shell and opens a native window showing the project picker. No backend runs until you pick a project; choosing one spawns the backend (from `backend/.venv` in dev) on a free port picked at runtime, pointed at that project's `trackeroo.db`.
 
 ### Building a release bundle
 
@@ -55,35 +57,46 @@ npm run build
 
 Produces `src-tauri/target/release/bundle/macos/Trackeroo.app` and a `.dmg` alongside it. Both the compiled sidecar and the build output are gitignored — rebuild after a fresh clone.
 
+## The project picker
+
+Every launched window shows the picker first (no board until you choose a project):
+
+- **New project** — type a name, then pick (via a native folder dialog) *where* to put it. The app creates a `<location>/<name>/` folder containing a fresh `trackeroo.db`, seeded with the default swim lanes, and titles the board with the name you typed.
+- **Open project** — pick an existing project folder (one that already contains a `trackeroo.db`) via the native folder dialog. If the folder has no `trackeroo.db`, the picker shows an error instead of proceeding.
+- **Recent projects** — a one-click list of folders you've opened before. Entries whose folder no longer has a `trackeroo.db` (moved or deleted) are hidden automatically.
+
+Once a project is open, the board's top bar has an **"Open project…"** button. It launches a brand-new, fully independent copy of the app (a separate OS process) that shows its own picker from scratch. Your current window keeps running its own project, untouched — there is no in-window project switching, and no "which project" is handed to the new process. Close a window to quit that project's process (its backend is shut down with it).
+
 ## What you get
 
 - **Native kanban board** — configurable swim lanes (default: Backlog / To Do / In Progress / Review / Done), draggable task cards, epic filtering and color-tagging.
 - **Task detail** — description, comments and annotations, block/unblock with a reason, dependency links to other tasks, and links out to PRs or Slack threads.
 - **Epics** — group related tasks; manage epics from their own view.
 - **Swim lane config** — add, rename, reorder, or remove columns; mark one as the "done" column (used for dependency warnings).
-- **MCP server** — see [`mcp/README.md`](mcp/README.md) for the Claude Code/Desktop registration snippet. Same 15 tools as v1, pointed at port `8787`.
+- **MCP server** — see [`mcp/README.md`](mcp/README.md) for the Claude Code/Desktop registration snippet. Same 15 tools as v1. Note: the MCP server talks to a project's backend over HTTP via `TRACKEROO_API_URL`, but v2's backend port is now chosen dynamically per project (see below), so point the MCP server at the port of the specific project process you want it to drive.
 
 ## Where your data lives
 
-- **Dev mode**: `backend/data/trackeroo.db`, relative to `backend/` (created automatically on first run).
-- **Release app**: `~/Library/Application Support/com.trackeroo.desktop/trackeroo.db` — kept outside the (read-only) app bundle.
+- **Your projects**: wherever you chose to create or open them. Each project folder holds a single `trackeroo.db`. In dev mode, if you haven't picked a project, nothing is created — the picker just waits.
+- **Recent-projects list**: `~/Library/Application Support/com.trackeroo.desktop/recent_projects.json` — a small JSON array of `{ "path", "name" }` entries, most-recent-first. Deleting it just clears the "Recent" list; your projects are unaffected.
 
 ## Data model
 
-v2's backend is a copy of v1's — the REST contract is identical, just served on port `8787` instead of `8000`. Full field-level detail lives in [`../v1/docs/api-contract.md`](../v1/docs/api-contract.md) and [`../v1/docs/openapi.json`](../v1/docs/openapi.json) rather than being duplicated here.
+v2's backend is a copy of v1's — the REST contract is identical. Full field-level detail lives in [`../v1/docs/api-contract.md`](../v1/docs/api-contract.md) and [`../v1/docs/openapi.json`](../v1/docs/openapi.json) rather than being duplicated here.
 
 ## Repo layout
 
 ```
-backend/     FastAPI + SQLite REST API — a copy of v1/backend, fixed port 8787
-frontend/    Svelte + Vite UI — a copy of v1/frontend, adapted for the Tauri webview
-mcp/         MCP server — point TRACKEROO_API_URL at http://localhost:8787
-src-tauri/   Rust shell: spawns/health-checks/kills the backend sidecar, hosts the webview
+backend/     FastAPI + SQLite REST API — a copy of v1/backend; DB path + port come from env vars per project
+frontend/    Svelte + Vite UI — a copy of v1/frontend, adapted for the Tauri webview; project picker + board
+mcp/         MCP server — point TRACKEROO_API_URL at the running project's http://localhost:<port>
+src-tauri/   Rust shell: shows the picker, spawns/health-checks/kills a per-project backend, hosts the webview
 ```
 
 ## Known gotchas
 
-- **Cold-start delay**: the webview starts fetching before the sidecar is guaranteed to be listening. The release build's PyInstaller sidecar has real self-extraction overhead (~9s measured on this machine), so the app briefly shows a loading state before the board appears — this is expected, not a bug (see `CLAUDE.md` for the fix if you're modifying the frontend).
+- **Cold-start delay after picking a project**: the webview starts fetching as soon as a project is chosen, before the freshly-spawned sidecar is guaranteed to be listening. The release build's PyInstaller sidecar has real self-extraction overhead (~9s measured on this machine), so the board briefly shows a loading state before it appears — this is expected, not a bug (see `CLAUDE.md`).
+- **Same project open in two windows**: nothing stops you opening the same project folder in two processes. SQLite's own locking handles low-rate concurrent access; heavy simultaneous writes from both could surface a transient "database is locked" error. This is an accepted edge case, not a supported workflow.
 - **Unsigned build**: the `.app`/`.dmg` are ad-hoc signed only (no Apple Developer signing identity configured). macOS Gatekeeper will warn on first launch — right-click → Open, or allow via System Settings → Privacy & Security.
 - **Sidecar binary naming**: must exactly match Tauri's `<name>-<target-triple>` convention — currently `trackeroo-backend-aarch64-apple-darwin` for Apple Silicon. See `src-tauri/tauri.conf.json`'s `bundle.externalBin`.
 

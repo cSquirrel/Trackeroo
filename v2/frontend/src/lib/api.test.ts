@@ -13,6 +13,9 @@ function response(body: unknown, status = 200): Response {
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
+  // The base URL is a runtime value (set per-project from the dynamic backend
+  // port); pin it to the relative "/api" prefix these assertions expect.
+  api.setApiBaseUrl("/api");
   fetchMock = vi.fn().mockResolvedValue(response({}));
   vi.stubGlobal("fetch", fetchMock);
 });
