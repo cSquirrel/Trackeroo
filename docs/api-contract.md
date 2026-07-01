@@ -322,7 +322,8 @@ Response `201`:
 ```
 - `400` if `depends_on_task_id == id` (self-dependency not allowed).
 - `404` if either task does not exist.
-- `409` if the dependency already exists (optional; implementers may dedupe).
+- `409` if the dependency already exists (deduped — same `task_id`/`depends_on_task_id` pair).
+- `422` if adding this dependency would create an immediate cycle (task `B` already depends on task `A`, and this request is `A` depends on `B`). Only the direct/immediate cycle is checked — full transitive-cycle detection is out of scope.
 
 ### DELETE /api/tasks/{id}/dependencies/{dependency_id}
 `{dependency_id}` is the `TaskDependency.id`.
