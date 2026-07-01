@@ -60,7 +60,15 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Trackeroo API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="Trackeroo API",
+    version="0.1.0",
+    description="Lightweight self-hosted task tracker: epics, tasks, swimlanes, "
+    "dependencies, blockers, comments, and links. This spec is the canonical "
+    "REST contract — regenerate docs/openapi.json via "
+    "`python -m app.export_openapi` after any route/schema change.",
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
