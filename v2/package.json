@@ -1,0 +1,14 @@
+{
+  "name": "trackeroo-v2",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Trackeroo v2 — Tauri desktop shell wrapping the FastAPI backend as a sidecar",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

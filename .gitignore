@@ -13,3 +13,19 @@ data/
 
 # Environment
 .env
+
+# ---- v2 (Tauri desktop app) ----
+# Rust / Tauri build output
+/v2/src-tauri/target/
+/v2/src-tauri/gen/schemas/
+# Bundled PyInstaller sidecar binary (built from v2/backend/run_sidecar.py)
+/v2/src-tauri/binaries/
+# Frontend build output
+/v2/frontend/dist/
+# PyInstaller sidecar build output
+/v2/backend/build/
+/v2/backend/dist/
+/v2/backend/*.spec
+
+# macOS
+.DS_Store
