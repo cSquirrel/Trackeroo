@@ -23,6 +23,13 @@ static BACKEND: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
 /// collide). The frontend reads this via `get_backend_port` to build its API URL.
 static BACKEND_PORT: OnceLock<Mutex<Option<u16>>> = OnceLock::new();
 
+/// A project path passed on the command line at launch (external launch only —
+/// terminal, `open --args`, Finder "Open With"). Computed once at startup and
+/// read by the frontend via `get_launch_target` so it can skip the picker and
+/// open that project directly. The in-window "open a different project" button
+/// spawns a bare instance with no args, so it never populates this.
+static LAUNCH_TARGET: OnceLock<LaunchTarget> = OnceLock::new();
+
 fn backend_slot() -> &'static Mutex<Option<Child>> {
     BACKEND.get_or_init(|| Mutex::new(None))
 }
@@ -189,6 +196,49 @@ fn get_backend_port() -> Option<u16> {
     *port_slot().lock().unwrap()
 }
 
+/// What (if anything) the CLI told us to open at launch. `path` set = open this
+/// project directly and skip the picker; `error` set = the given arg was invalid,
+/// show the picker with this message; both `None` = no arg, show the picker.
+#[derive(Serialize, Clone, Default)]
+struct LaunchTarget {
+    path: Option<String>,
+    error: Option<String>,
+}
+
+/// Interpret the process args as an optional project path. The first non-flag
+/// positional argument is treated as a project folder; it must exist and be a
+/// directory (it need not already contain a `trackeroo.db` — a fresh folder is a
+/// new project). Relative paths are resolved against the launch cwd. Flag-like
+/// args (e.g. macOS's legacy `-psn_...`) are ignored.
+fn compute_launch_target() -> LaunchTarget {
+    let arg = std::env::args()
+        .skip(1)
+        .find(|a| !a.starts_with('-'));
+    let Some(arg) = arg else {
+        return LaunchTarget::default();
+    };
+    match std::fs::canonicalize(&arg) {
+        Ok(p) if p.is_dir() => LaunchTarget {
+            path: Some(p.to_string_lossy().to_string()),
+            error: None,
+        },
+        Ok(_) => LaunchTarget {
+            path: None,
+            error: Some(format!("Launch path is not a folder: {arg}")),
+        },
+        Err(_) => LaunchTarget {
+            path: None,
+            error: Some(format!("Launch path does not exist: {arg}")),
+        },
+    }
+}
+
+/// The launch directive computed from the CLI at startup (see `LaunchTarget`).
+#[tauri::command]
+fn get_launch_target() -> LaunchTarget {
+    LAUNCH_TARGET.get().cloned().unwrap_or_default()
+}
+
 /// Open (or create) the project whose folder is `path`, spawn a backend for its
 /// `trackeroo.db` on a freshly chosen free port, wait for health, record it in
 /// the recent list, and return the port so the frontend can point its API client
@@ -268,7 +318,9 @@ fn open_new_window() -> Result<(), String> {
 pub fn run() {
     // The backend is no longer spawned at startup: the project picker shows
     // first and needs no backend. A per-project backend is spawned only once the
-    // user picks a project (via the open_project command).
+    // user picks a project (via the open_project command) — or automatically, if
+    // a project path was passed on the command line (see LAUNCH_TARGET).
+    let _ = LAUNCH_TARGET.set(compute_launch_target());
 
     // Reap the backend on Ctrl-C / SIGTERM / SIGHUP (terminal or `kill`), then
     // exit. GUI quits are handled by RunEvent::Exit below.
@@ -282,6 +334,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             get_backend_port,
+            get_launch_target,
             open_project,
             list_recent_projects,
             open_new_window,

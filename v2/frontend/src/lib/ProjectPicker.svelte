@@ -7,7 +7,14 @@
 
   // Called once a backend has been spawned and is healthy. `newName` is the
   // display name for a freshly created project (so the board title reflects it).
-  let { onopened }: { onopened: (port: number, newName?: string) => void } = $props();
+  // `initialError` is shown on first render (e.g. an invalid CLI launch path).
+  let {
+    onopened,
+    initialError = null,
+  }: {
+    onopened: (port: number, newName?: string) => void;
+    initialError?: string | null;
+  } = $props();
 
   let recent = $state<RecentProject[]>([]);
   let newName = $state("");
@@ -15,6 +22,7 @@
   let error = $state<string | null>(null);
 
   onMount(async () => {
+    error = initialError;
     try {
       recent = await invoke<RecentProject[]>("list_recent_projects");
     } catch {

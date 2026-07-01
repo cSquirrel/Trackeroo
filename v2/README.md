@@ -67,6 +67,23 @@ Every launched window shows the picker first (no board until you choose a projec
 
 Once a project is open, the board's top bar has an **"Open project…"** button. It launches a brand-new, fully independent copy of the app (a separate OS process) that shows its own picker from scratch. Your current window keeps running its own project, untouched — there is no in-window project switching, and no "which project" is handed to the new process. Close a window to quit that project's process (its backend is shut down with it).
 
+## Launching a project from the command line
+
+You can skip the picker and open a project folder directly by passing its path when launching the app externally (terminal, a script, or Finder "Open With"):
+
+```bash
+# Direct binary launch (reliable — always a new, independent instance):
+/Applications/Trackeroo.app/Contents/MacOS/trackeroo /path/to/my-project
+
+# Via `open` (use -n to force a new instance, since a bare `open` refocuses an
+# already-running window instead of launching a fresh one):
+open -n /Applications/Trackeroo.app --args /path/to/my-project
+```
+
+The path must be an existing folder. It does **not** need to already contain a `trackeroo.db` — a fresh, empty folder becomes a new project; a folder that already has a `trackeroo.db` opens with its existing data. If the argument is missing or points at something that isn't a folder, the app just shows the normal picker (with an inline error if the path was invalid, so a typo isn't swallowed silently).
+
+This is only for external launches. The in-window "Open project…" button always opens a fresh picker (it never carries a path), exactly as described above.
+
 ## What you get
 
 - **Native kanban board** — configurable swim lanes (default: Backlog / To Do / In Progress / Review / Done), draggable task cards, epic filtering and color-tagging.
