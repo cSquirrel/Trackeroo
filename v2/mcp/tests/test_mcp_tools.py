@@ -59,6 +59,74 @@ def test_get_project_seeds_five_swimlanes(mcp_call):
     )
 
 
+# --- Swimlanes ---------------------------------------------------------------
+
+
+def test_create_swimlane_then_visible_in_project(mcp_call):
+    name = _uniq("lane")
+    created = _ok_json(mcp_call("create_swimlane", {"name": name, "position": 99}))
+    assert created["name"] == name
+    assert created["is_done_column"] is False
+
+    project = _ok_json(mcp_call("get_project"))
+    assert any(
+        lane["id"] == created["id"] and lane["name"] == name
+        for lane in project["swimlanes"]
+    )
+
+
+def test_update_swimlane_reflected_in_project(mcp_call):
+    created = _ok_json(mcp_call("create_swimlane", {"name": _uniq("lane")}))
+    new_name = _uniq("renamed")
+    updated = _ok_json(
+        mcp_call(
+            "update_swimlane",
+            {"swimlane_id": created["id"], "name": new_name, "is_done_column": True},
+        )
+    )
+    assert updated["name"] == new_name
+    assert updated["is_done_column"] is True
+
+    project = _ok_json(mcp_call("get_project"))
+    match = next(lane for lane in project["swimlanes"] if lane["id"] == created["id"])
+    assert match["name"] == new_name
+    assert match["is_done_column"] is True
+
+
+def test_delete_swimlane_removes_it(mcp_call):
+    created = _ok_json(mcp_call("create_swimlane", {"name": _uniq("lane")}))
+    project = _ok_json(mcp_call("get_project"))
+    assert any(lane["id"] == created["id"] for lane in project["swimlanes"])
+
+    result = mcp_call("delete_swimlane", {"swimlane_id": created["id"]})
+    assert result.isError is False
+
+    project_after = _ok_json(mcp_call("get_project"))
+    assert not any(lane["id"] == created["id"] for lane in project_after["swimlanes"])
+
+    # Rejection of deleting the *last* remaining swimlane isn't testable here:
+    # this suite runs against a shared, session-scoped stack (many tests rely
+    # on the default 5 seeded lanes still existing), so driving the global
+    # count down to 1 would corrupt every other test. Covered instead by
+    # manual verification against an isolated project copy.
+
+
+def test_reorder_swimlanes_changes_project_order(mcp_call):
+    project = _ok_json(mcp_call("get_project"))
+    original_ids = [lane["id"] for lane in project["swimlanes"]]
+    assert len(original_ids) >= 2, "need at least 2 swimlanes to test reordering"
+
+    reversed_ids = list(reversed(original_ids))
+    reordered = _ok_json(mcp_call("reorder_swimlanes", {"ordered_ids": reversed_ids}))
+    assert [lane["id"] for lane in reordered] == reversed_ids
+
+    # Restore original order — this suite's stack is shared/session-scoped, and
+    # other tests (e.g. test_get_project_seeds_five_swimlanes) assert exact
+    # default ordering.
+    restored = _ok_json(mcp_call("reorder_swimlanes", {"ordered_ids": original_ids}))
+    assert [lane["id"] for lane in restored] == original_ids
+
+
 # --- Epics ------------------------------------------------------------------
 
 

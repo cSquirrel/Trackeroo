@@ -115,6 +115,55 @@ def get_project() -> str:
     return _dump(_request("GET", "/api/project"))
 
 
+# --- Swimlanes ---------------------------------------------------------------
+
+
+@mcp.tool()
+def create_swimlane(name: str, position: int = 0, is_done_column: bool = False) -> str:
+    """Create a swimlane (kanban column). `position` controls left-to-right order
+    (0 = leftmost); `is_done_column` marks it as a "done" lane for dependency-
+    warning purposes (see move_task).
+    """
+    payload = {"name": name, "position": position, "is_done_column": is_done_column}
+    return _dump(_request("POST", "/api/swimlanes", json=payload))
+
+
+@mcp.tool()
+def update_swimlane(
+    swimlane_id: int,
+    name: str | None = None,
+    position: int | None = None,
+    is_done_column: bool | None = None,
+) -> str:
+    """Partially update a swimlane. Only provided fields are changed."""
+    payload: dict[str, Any] = {}
+    if name is not None:
+        payload["name"] = name
+    if position is not None:
+        payload["position"] = position
+    if is_done_column is not None:
+        payload["is_done_column"] = is_done_column
+    return _dump(_request("PATCH", f"/api/swimlanes/{swimlane_id}", json=payload))
+
+
+@mcp.tool()
+def delete_swimlane(swimlane_id: int) -> str:
+    """Delete a swimlane. Fails if it's the last remaining one (at least one
+    swimlane must always exist) — the backend's error message explains this.
+    """
+    _request("DELETE", f"/api/swimlanes/{swimlane_id}")
+    return f"Deleted swimlane {swimlane_id}."
+
+
+@mcp.tool()
+def reorder_swimlanes(ordered_ids: list[int]) -> str:
+    """Reorder all swimlanes at once. `ordered_ids` must contain every existing
+    swimlane id exactly once, in the desired left-to-right order — call
+    get_project first to see current ids. Returns the reordered list.
+    """
+    return _dump(_request("POST", "/api/swimlanes/reorder", json={"ordered_ids": ordered_ids}))
+
+
 # --- Epics -----------------------------------------------------------------
 
 
