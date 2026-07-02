@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { confirm } from "@tauri-apps/plugin-dialog";
   import * as api from "./api";
   import EpicTag from "./EpicTag.svelte";
   import { store } from "./store.svelte";
@@ -61,8 +62,11 @@
   }
 
   async function remove(epic: Epic) {
-    if (!confirm(`Delete epic "${epic.title}"? Tasks keep existing but lose this epic.`))
-      return;
+    const ok = await confirm(
+      `Delete epic "${epic.title}"? Tasks keep existing but lose this epic.`,
+      { kind: "warning" },
+    );
+    if (!ok) return;
     try {
       await api.deleteEpic(epic.id);
       await Promise.all([store.refreshEpics(), store.refreshTasks()]);

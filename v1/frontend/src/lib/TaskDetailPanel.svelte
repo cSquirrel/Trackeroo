@@ -133,6 +133,7 @@
 
   async function deleteComment(c: Comment) {
     if (!detail) return;
+    if (!confirm("Delete this comment?")) return;
     try {
       await api.deleteComment(detail.id, c.id);
       await load();
@@ -159,6 +160,7 @@
 
   async function removeLink(link: TaskLink) {
     if (!detail) return;
+    if (!confirm(`Remove link "${link.label ?? link.url}"?`)) return;
     try {
       await api.removeLink(detail.id, link.id);
       await load();
@@ -181,6 +183,7 @@
 
   async function removeDependency(dependencyId: number) {
     if (!detail) return;
+    if (!confirm("Remove this dependency?")) return;
     try {
       await api.removeDependency(detail.id, dependencyId);
       await load();

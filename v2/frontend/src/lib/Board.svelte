@@ -29,7 +29,14 @@
     // Re-read reactive deps so the effect re-runs when data/filter change.
     void store.tasks;
     void store.project;
+    void store.epics;
     void epicFilter;
+    // Deleted epics shouldn't leave the board stuck on a filter that now
+    // matches nothing — reset it so the (still-existing, just unlinked) tasks
+    // reappear instead of looking like they vanished.
+    if (epicFilter !== "all" && !store.epicById(epicFilter)) {
+      epicFilter = "all";
+    }
     if (!dragging) rebuild();
   });
 

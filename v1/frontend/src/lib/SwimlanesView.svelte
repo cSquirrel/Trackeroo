@@ -10,6 +10,10 @@
   let editingId = $state<number | null>(null);
   let editName = $state("");
 
+  // lane whose delete is mid-confirmation (only set when it has tasks to move)
+  let deletingLaneId = $state<number | null>(null);
+  let moveToId = $state<number | "">("");
+
   function fail(e: unknown) {
     localError = e instanceof Error ? e.message : String(e);
   }
@@ -53,10 +57,37 @@
     }
   }
 
-  async function remove(lane: SwimLane) {
-    if (!confirm(`Delete column "${lane.name}"? Its tasks are deleted too.`)) return;
+  function requestDelete(lane: SwimLane) {
+    if (lanes.length <= 1) return; // at least one lane must always exist
+    const tasks = store.tasksForSwimlane(lane.id);
+    if (tasks.length === 0) {
+      if (confirm(`Delete empty column "${lane.name}"?`)) doDelete(lane.id);
+      return;
+    }
+    deletingLaneId = lane.id;
+    moveToId = lanes.find((l) => l.id !== lane.id)?.id ?? "";
+  }
+
+  function cancelDelete() {
+    deletingLaneId = null;
+  }
+
+  async function confirmMoveAndDelete(lane: SwimLane) {
+    if (moveToId === "") return;
     try {
-      await api.deleteSwimlane(lane.id);
+      for (const t of store.tasksForSwimlane(lane.id)) {
+        await api.updateTask(t.id, { swimlane_id: moveToId });
+      }
+      await doDelete(lane.id);
+    } catch (e) {
+      fail(e);
+    }
+  }
+
+  async function doDelete(laneId: number) {
+    try {
+      await api.deleteSwimlane(laneId);
+      deletingLaneId = null;
       await Promise.all([store.refreshProject(), store.refreshTasks()]);
     } catch (e) {
       fail(e);
@@ -108,6 +139,19 @@
           <input class="grow" bind:value={editName} />
           <button class="primary" onclick={saveEdit}>Save</button>
           <button onclick={() => (editingId = null)}>Cancel</button>
+        {:else if deletingLaneId === lane.id}
+          <span class="grow">
+            Move {store.tasksForSwimlane(lane.id).length} ticket(s) to
+          </span>
+          <select bind:value={moveToId}>
+            {#each lanes.filter((l) => l.id !== lane.id) as other (other.id)}
+              <option value={other.id}>{other.name}</option>
+            {/each}
+          </select>
+          <button class="danger" onclick={() => confirmMoveAndDelete(lane)}>
+            Move &amp; delete
+          </button>
+          <button onclick={cancelDelete}>Cancel</button>
         {:else}
           <span class="name">{lane.name}</span>
           <label class="check">
@@ -118,7 +162,14 @@
             /> done
           </label>
           <button onclick={() => startEdit(lane)}>Rename</button>
-          <button class="danger" onclick={() => remove(lane)}>Delete</button>
+          <button
+            class="danger"
+            onclick={() => requestDelete(lane)}
+            disabled={lanes.length <= 1}
+            title={lanes.length <= 1 ? "At least one lane must exist" : ""}
+          >
+            Delete
+          </button>
         {/if}
       </div>
     {/each}

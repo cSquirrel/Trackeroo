@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { confirm } from "@tauri-apps/plugin-dialog";
   import * as api from "./api";
   import { describeDependencyError } from "./errors";
   import EpicTag from "./EpicTag.svelte";
@@ -133,6 +134,7 @@
 
   async function deleteComment(c: Comment) {
     if (!detail) return;
+    if (!(await confirm("Delete this comment?", { kind: "warning" }))) return;
     try {
       await api.deleteComment(detail.id, c.id);
       await load();
@@ -159,6 +161,8 @@
 
   async function removeLink(link: TaskLink) {
     if (!detail) return;
+    if (!(await confirm(`Remove link "${link.label ?? link.url}"?`, { kind: "warning" })))
+      return;
     try {
       await api.removeLink(detail.id, link.id);
       await load();
@@ -181,6 +185,7 @@
 
   async function removeDependency(dependencyId: number) {
     if (!detail) return;
+    if (!(await confirm("Remove this dependency?", { kind: "warning" }))) return;
     try {
       await api.removeDependency(detail.id, dependencyId);
       await load();

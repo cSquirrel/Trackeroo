@@ -52,6 +52,10 @@ def update_swimlane(
 @router.delete("/{swimlane_id}", status_code=204)
 def delete_swimlane(swimlane_id: int, db: Session = Depends(get_db)) -> None:
     swimlane = _get_swimlane(db, swimlane_id)
+    if db.query(SwimLane).count() <= 1:
+        raise HTTPException(
+            status_code=400, detail="At least one swimlane must exist"
+        )
     db.delete(swimlane)
     db.commit()
 

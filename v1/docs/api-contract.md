@@ -43,7 +43,11 @@ Timestamps are ISO 8601 strings (UTC).
   is required to call `DELETE /api/tasks/{id}/dependencies/{dependency_id}`.
 - **Cascades**: deleting a task removes its comments, links, and dependency
   rows. Deleting an epic sets `task.epic_id` to `null` on its tasks. Deleting
-  a swimlane cascades to its tasks.
+  a swimlane cascades to its tasks — callers that want to preserve those tasks
+  must move them to another swimlane first (`PATCH` each task's
+  `swimlane_id`) before deleting. `DELETE /api/swimlanes/{id}` returns `400`
+  if it's the project's last remaining swimlane — at least one must always
+  exist.
 - **Default seed data**: on first boot with no `Project` row, the backend
   creates one default project and seeds five swimlanes — Backlog, To Do, In
   Progress, Review, Done (Done has `is_done_column = true`).
