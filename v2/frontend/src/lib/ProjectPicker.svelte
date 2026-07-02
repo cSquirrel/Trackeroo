@@ -67,7 +67,7 @@
     });
     if (typeof parent !== "string") return; // cancelled
     const path = `${parent.replace(/\/$/, "")}/${name}`;
-    await spawnFor(path, true, "Creating project…", name);
+    await spawnFor(path, true, "Creating project", name);
   }
 
   async function openExisting() {
@@ -77,11 +77,11 @@
       title: "Open a Trackeroo project folder",
     });
     if (typeof dir !== "string") return; // cancelled
-    await spawnFor(dir, false, "Opening project…");
+    await spawnFor(dir, false, "Opening project");
   }
 
   async function openRecent(r: RecentProject) {
-    await spawnFor(r.path, false, "Opening project…");
+    await spawnFor(r.path, false, "Opening project");
   }
 </script>
 

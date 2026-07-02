@@ -69,7 +69,7 @@
   <ProjectPicker onopened={onProjectOpened} initialError={launchError} />
 {:else if openingCli}
   <div class="launch-loading">
-    <Spinner label="Opening project…" />
+    <Spinner label="Opening project" />
   </div>
 {/if}
 
