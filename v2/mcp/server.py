@@ -1,13 +1,14 @@
 """MCP server exposing Trackeroo task-board CRUD as tools over the REST API.
 
-Thin client of the REST API documented in ../docs/api-contract.md. v2's backend
+Thin client of the REST API documented in ../docs/api-contract.md. The backend
 binds to a fresh, unpredictable port every time a project is opened (that's
 what lets multiple projects run at once), so a hardcoded URL goes stale the
 moment the app restarts. Point this at the project folder instead via
 TRACKEROO_PROJECT_PATH, and it discovers the live port by reading
 "<project>/.trackeroo/port" (written by the app on every backend spawn) before
 each request. TRACKEROO_API_URL remains supported as a direct override for
-cases where a fixed URL is genuinely correct (e.g. v1's Docker deployment).
+cases where a known, fixed backend URL is genuinely correct (e.g. manual
+testing against a backend you started yourself).
 """
 
 from __future__ import annotations

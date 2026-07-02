@@ -1,15 +1,10 @@
 # Trackeroo
 
-This repository holds versioned implementations of **Trackeroo**, a lightweight, self-hosted single-project task tracker (epics → tasks, configurable kanban swim lanes, dependencies, blockers, comments/annotations, PR/Slack links, plus an MCP server for AI agents).
+**Trackeroo** is a lightweight, self-hosted single-project task tracker: epics → tasks, configurable kanban swim lanes, dependencies, blockers, comments/annotations, PR/Slack links, plus an MCP server so AI agents can create and update tasks directly.
 
-## Implementations
+Packaged as a native macOS desktop app (Tauri) — the target use case is a single user on a single machine, with no remote access ever needed. See [`v2/README.md`](v2/README.md) for the product overview, quickstart, and how to build/run it.
 
-- **[`v1/`](v1/README.md) — web app.** FastAPI + Svelte + SQLite, self-hosted via `docker compose up`, accessed through a browser. Complete, tested, fully working.
-- **[`v2/`](v2/README.md) — Tauri desktop app.** A native macOS app wrapping the same backend as a bundled sidecar process, no Docker or browser involved. The active development target: the confirmed use case is a single user on a single machine with no remote access ever needed, which fits a native app better than a self-hosted server.
-
-Each version is self-contained under its own top-level folder — its own backend/frontend/mcp copies, its own README and CLAUDE.md. Nothing is shared between them at the code level; a fix in one doesn't automatically apply to the other.
-
-> `.github/workflows/` stays at the repo root (GitHub only discovers workflows there); the CI job paths are prefixed to point into `v1/` — v2 has no CI wiring yet.
+> This repo previously held a Docker/web-app implementation (`v1/`) alongside this one; it's been retired since the target use case is single-machine, not self-hosted-server. `v2/` — historically the second implementation, now the only one — is left named as-is rather than flattened to the repo root.
 
 ## Worktrees
 

@@ -28,8 +28,9 @@ restarts with no config changes — as long as that project is currently open
 in Trackeroo. If it isn't, you'll get a clear error telling you to open it
 first, instead of a silent connection failure.
 
-For a fixed URL instead (e.g. v1's Docker deployment, which doesn't have this
-problem), `TRACKEROO_API_URL` still works and takes priority if both are set.
+For a known, fixed backend URL instead (e.g. manual testing against a
+backend you started yourself), `TRACKEROO_API_URL` still works and takes
+priority if both are set.
 
 ## Register with Claude Code
 

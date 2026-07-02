@@ -5,7 +5,9 @@ an OpenAPI 3.1 spec generated directly from the FastAPI app (routes + Pydantic
 schemas), so it can never drift from the actual request/response shapes the
 way a hand-written doc can.
 
-- **Browse interactively**: run the backend and open `http://localhost:8000/docs`
+- **Browse interactively**: with a project open, the backend's port is dynamic
+  (see `../CLAUDE.md`'s "Dynamic port" note) — read it from
+  `<project>/.trackeroo/port` and open `http://localhost:<port>/docs`
   (Swagger UI) or `/redoc`.
 - **Regenerate after any route/schema change**:
   ```bash
@@ -51,3 +53,8 @@ Timestamps are ISO 8601 strings (UTC).
 - **Default seed data**: on first boot with no `Project` row, the backend
   creates one default project and seeds five swimlanes — Backlog, To Do, In
   Progress, Review, Done (Done has `is_done_column = true`).
+- **`Task.type` is free-text, not an enum.** "chore", "fix", "feature", or
+  any string the caller wants — deliberately no `CHECK` constraint or fixed
+  set of values. Databases created before this field existed get it added
+  automatically via a startup migration (`_migrate_add_task_type` in
+  `backend/app/main.py`).

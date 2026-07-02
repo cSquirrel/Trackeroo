@@ -1,8 +1,6 @@
 # Trackeroo
 
-Versioned implementations of Trackeroo — see `README.md` for what each version (`v1/`, `v2/`) is, why both exist, and how to run them. This file covers repo-wide conventions for anyone (or any agent) working in this repo, regardless of which version.
-
-Each version has its own `CLAUDE.md` with implementation-specific conventions (`v1/CLAUDE.md`, `v2/CLAUDE.md`) — Claude Code auto-loads the nearest one, so working from inside `v1/` or `v2/` picks up the right instructions on top of this file.
+A lightweight, self-hosted single-project task tracker — see `README.md` for the product overview and `v2/README.md`/`v2/CLAUDE.md` for the implementation (Tauri desktop app; `cd` into `v2/` before working on it, its `CLAUDE.md` has the real conventions). This file covers repo-wide conventions.
 
 ## Worktrees are mandatory for any work
 
@@ -21,4 +19,4 @@ cd worktrees/<short-task-name>
 
 ## Repo layout notes
 
-- `.github/workflows/` stays at the repo root because GitHub only discovers workflows there; job paths inside are prefixed per-version (e.g. `v1/backend`) — v2 has no CI wiring yet.
+- No CI wiring exists yet. If one is added later, GitHub only discovers workflows at `.github/workflows/` relative to the repo root, so put it there even though the code lives under `v2/`.

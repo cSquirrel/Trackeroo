@@ -1,8 +1,8 @@
-# Trackeroo (v2 — Tauri desktop app)
+# Trackeroo (Tauri desktop app)
 
-> **v2 implementation.** This is the Tauri desktop-app implementation of Trackeroo. Treat `v2/` as your working directory when working on it. See the repo-root `README.md` for how versions are organized.
+Treat `v2/` as your working directory when working on it. See the repo-root `README.md` for repo layout notes.
 
-A lightweight task tracker: epics → tasks, configurable kanban swim lanes, dependencies, blockers, comments/annotations, and links to PRs or Slack threads — plus an MCP server so AI agents can create and update tasks directly. v2 packages this as a native macOS desktop app instead of a self-hosted web service, since the target use case is a single user on a single machine with no remote access ever needed.
+A lightweight task tracker: epics → tasks, configurable kanban swim lanes, dependencies, blockers, comments/annotations, and links to PRs or Slack threads — plus an MCP server so AI agents can create and update tasks directly. Packaged as a native macOS desktop app, since the target use case is a single user on a single machine with no remote access ever needed.
 
 **Multiple projects, vault-style.** Each project is just a folder — Trackeroo keeps all of its own state (database, the port its backend is currently running on, anything added later) inside a `.trackeroo/` subfolder within it, so the rest of the folder stays yours. One project = one folder. You pick projects the way Obsidian picks vaults: the app opens a **project picker** on every launch, and you can have several projects open at once — each in its own window and its own OS process. Projects are ordinary folders, so you can move, copy, back up, or sync them however you like — `.gitignore` the single `.trackeroo/` entry if you version the folder yourself and don't want the database tracked.
 
@@ -100,7 +100,7 @@ This is only for external launches. The in-window "Open project…" button alway
 - **Task detail** — description, comments and annotations, block/unblock with a reason, dependency links to other tasks, and links out to PRs or Slack threads.
 - **Epics** — group related tasks; manage epics from their own view.
 - **Swim lane config** — add, rename, reorder, or remove columns; mark one as the "done" column (used for dependency warnings).
-- **MCP server** — bundled into the app as `Contents/MacOS/trackeroo-mcp`, a real executable (no Python/pip/venv needed to use it). Same 15 tools as v1. Point it at a project by folder, not port — `TRACKEROO_PROJECT_PATH=/path/to/project` — it discovers the live port automatically and keeps working across app restarts. See [`mcp/README.md`](mcp/README.md) for the Claude Code/Desktop registration snippet.
+- **MCP server** — bundled into the app as `Contents/MacOS/trackeroo-mcp`, a real executable (no Python/pip/venv needed to use it), exposing 15 tools. Point it at a project by folder, not port — `TRACKEROO_PROJECT_PATH=/path/to/project` — it discovers the live port automatically and keeps working across app restarts. See [`mcp/README.md`](mcp/README.md) for the Claude Code/Desktop registration snippet.
 
 ## Where your data lives
 
@@ -109,15 +109,16 @@ This is only for external launches. The in-window "Open project…" button alway
 
 ## Data model
 
-v2's backend is a copy of v1's — the REST contract is identical. Full field-level detail lives in [`../v1/docs/api-contract.md`](../v1/docs/api-contract.md) and [`../v1/docs/openapi.json`](../v1/docs/openapi.json) rather than being duplicated here.
+Full field-level detail lives in [`docs/api-contract.md`](docs/api-contract.md) and [`docs/openapi.json`](docs/openapi.json) (generated from the backend — regenerate with `cd backend && .venv/bin/python -m app.export_openapi` after any schema change).
 
 ## Repo layout
 
 ```
-backend/     FastAPI + SQLite REST API — a copy of v1/backend; DB path + port come from env vars per project
-frontend/    Svelte + Vite UI — a copy of v1/frontend, adapted for the Tauri webview; project picker + board
+backend/     FastAPI + SQLite REST API; DB path + port come from env vars per project
+frontend/    Svelte + Vite UI, adapted for the Tauri webview; project picker + board
 mcp/         MCP server — bundled into the app; point TRACKEROO_PROJECT_PATH at a project folder
 src-tauri/   Rust shell: shows the picker, spawns/health-checks/kills a per-project backend, hosts the webview
+docs/        openapi.json (generated, canonical REST contract) + api-contract.md (conventions/business rules)
 ```
 
 ## Known gotchas
@@ -129,4 +130,4 @@ src-tauri/   Rust shell: shows the picker, spawns/health-checks/kills a per-proj
 
 ## Versioning
 
-Same as v1 — see the repo-root `README.md`.
+See the repo-root `README.md`.
