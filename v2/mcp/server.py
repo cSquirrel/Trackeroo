@@ -1,32 +1,65 @@
 """MCP server exposing Trackeroo task-board CRUD as tools over the REST API.
 
-Thin client of the REST API documented in ../docs/api-contract.md. Reads the API
-base URL from the TRACKEROO_API_URL env var (default http://localhost:8000).
+Thin client of the REST API documented in ../docs/api-contract.md. v2's backend
+binds to a fresh, unpredictable port every time a project is opened (that's
+what lets multiple projects run at once), so a hardcoded URL goes stale the
+moment the app restarts. Point this at the project folder instead via
+TRACKEROO_PROJECT_PATH, and it discovers the live port by reading
+"<project>/.trackeroo-port" (written by the app on every backend spawn) before
+each request. TRACKEROO_API_URL remains supported as a direct override for
+cases where a fixed URL is genuinely correct (e.g. v1's Docker deployment).
 """
 
 from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Any
 
 import httpx
 from mcp.server.fastmcp import FastMCP
 
-API_URL = os.environ.get("TRACKEROO_API_URL", "http://localhost:8000").rstrip("/")
+_EXPLICIT_API_URL = os.environ.get("TRACKEROO_API_URL")
+_PROJECT_PATH = os.environ.get("TRACKEROO_PROJECT_PATH")
+_DEFAULT_API_URL = "http://localhost:8000"
 
 mcp = FastMCP("trackeroo")
 
-_client = httpx.Client(base_url=API_URL, timeout=30.0)
+_client = httpx.Client(timeout=30.0)
+
+
+def _resolve_base_url() -> str:
+    """The API base URL for the next request.
+
+    Re-reads the port file each call (when configured by project path) so a
+    restarted app that picked a different port is picked up automatically,
+    without needing to touch the MCP client config.
+    """
+    if _EXPLICIT_API_URL:
+        return _EXPLICIT_API_URL.rstrip("/")
+    if _PROJECT_PATH:
+        port_file = Path(_PROJECT_PATH) / ".trackeroo-port"
+        try:
+            port = port_file.read_text().strip()
+        except FileNotFoundError:
+            raise RuntimeError(
+                f"No running Trackeroo backend found for project "
+                f"'{_PROJECT_PATH}' (missing {port_file}). Open this project "
+                f"in the Trackeroo app first."
+            ) from None
+        return f"http://localhost:{port}"
+    return _DEFAULT_API_URL
 
 
 def _request(method: str, path: str, **kwargs: Any) -> Any:
     """Call the REST API and return parsed JSON, raising a clear error on non-2xx."""
+    base_url = _resolve_base_url()
     try:
-        resp = _client.request(method, path, **kwargs)
+        resp = _client.request(method, f"{base_url}{path}", **kwargs)
     except httpx.RequestError as exc:
         raise RuntimeError(
-            f"Could not reach Trackeroo API at {API_URL} ({method} {path}): {exc}"
+            f"Could not reach Trackeroo API at {base_url} ({method} {path}): {exc}"
         ) from exc
 
     if resp.is_success:

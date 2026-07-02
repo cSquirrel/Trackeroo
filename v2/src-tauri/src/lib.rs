@@ -30,12 +30,28 @@ static BACKEND_PORT: OnceLock<Mutex<Option<u16>>> = OnceLock::new();
 /// spawns a bare instance with no args, so it never populates this.
 static LAUNCH_TARGET: OnceLock<LaunchTarget> = OnceLock::new();
 
+/// The folder of the project this process currently has open, so `kill_backend`
+/// knows where to remove the port file it wrote in `open_project`.
+static PROJECT_FOLDER: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
+
 fn backend_slot() -> &'static Mutex<Option<Child>> {
     BACKEND.get_or_init(|| Mutex::new(None))
 }
 
 fn port_slot() -> &'static Mutex<Option<u16>> {
     BACKEND_PORT.get_or_init(|| Mutex::new(None))
+}
+
+fn project_folder_slot() -> &'static Mutex<Option<PathBuf>> {
+    PROJECT_FOLDER.get_or_init(|| Mutex::new(None))
+}
+
+/// Where `open_project` publishes the current backend port for this project, so
+/// the MCP server can discover it by project folder instead of needing a
+/// hardcoded port in its config (which goes stale the moment the port changes
+/// on the next launch).
+fn port_file_path(folder: &Path) -> PathBuf {
+    folder.join(".trackeroo-port")
 }
 
 fn kill_backend() {
@@ -56,6 +72,11 @@ fn kill_backend() {
     }
     if let Ok(mut guard) = port_slot().lock() {
         *guard = None;
+    }
+    if let Ok(mut guard) = project_folder_slot().lock() {
+        if let Some(folder) = guard.take() {
+            let _ = fs::remove_file(port_file_path(&folder));
+        }
     }
 }
 
@@ -288,6 +309,10 @@ fn open_project(
         return Err("Backend did not become healthy in time.".into());
     }
     *port_slot().lock().unwrap() = Some(port);
+    // Best-effort: an MCP server pointed at this project folder reads this file
+    // to find the live port instead of relying on a hardcoded, quickly-stale one.
+    let _ = fs::write(port_file_path(&folder), port.to_string());
+    *project_folder_slot().lock().unwrap() = Some(folder.clone());
 
     let display_name = name
         .map(|n| n.trim().to_string())

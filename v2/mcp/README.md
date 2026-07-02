@@ -18,13 +18,23 @@ python3 -m venv .venv
 
 ## Configuration
 
-The server reads the API base URL from the `TRACKEROO_API_URL` environment
-variable. In v2 the Trackeroo backend runs as the Tauri app's sidecar on port
-`8787`, so point the MCP server at it:
+v2's backend binds to a fresh, unpredictable port every time a project is
+opened (that's what lets multiple projects run at once) — a hardcoded URL
+goes stale the moment the app restarts. Point the server at the **project
+folder** instead, and it discovers the live port automatically:
 
 ```bash
-export TRACKEROO_API_URL="http://localhost:8787"
+export TRACKEROO_PROJECT_PATH="/path/to/your/project"
 ```
+
+It reads `<project>/.trackeroo-port` (written by the app every time it spawns
+a backend) fresh before each request, so it keeps working across app
+restarts with no config changes — as long as that project is currently open
+in Trackeroo. If it isn't, you'll get a clear error telling you to open it
+first, instead of a silent connection failure.
+
+For a fixed URL instead (e.g. v1's Docker deployment, which doesn't have this
+problem), `TRACKEROO_API_URL` still works and takes priority if both are set.
 
 ## Run standalone
 
@@ -77,7 +87,7 @@ command below). Use the absolute path to the venv Python so dependencies resolve
       "command": "/Users/ciukes/dev/Trackeroo/main/v2/mcp/.venv/bin/python",
       "args": ["/Users/ciukes/dev/Trackeroo/main/v2/mcp/server.py"],
       "env": {
-        "TRACKEROO_API_URL": "http://localhost:8787"
+        "TRACKEROO_PROJECT_PATH": "/path/to/your/project"
       }
     }
   }
@@ -88,7 +98,7 @@ Or via the CLI:
 
 ```bash
 claude mcp add trackeroo \
-  --env TRACKEROO_API_URL=http://localhost:8787 \
+  --env TRACKEROO_PROJECT_PATH=/path/to/your/project \
   -- /Users/ciukes/dev/Trackeroo/main/v2/mcp/.venv/bin/python \
      /Users/ciukes/dev/Trackeroo/main/v2/mcp/server.py
 ```
@@ -106,7 +116,7 @@ same server entry:
       "command": "/Users/ciukes/dev/Trackeroo/main/v2/mcp/.venv/bin/python",
       "args": ["/Users/ciukes/dev/Trackeroo/main/v2/mcp/server.py"],
       "env": {
-        "TRACKEROO_API_URL": "http://localhost:8787"
+        "TRACKEROO_PROJECT_PATH": "/path/to/your/project"
       }
     }
   }
