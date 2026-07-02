@@ -58,3 +58,13 @@ Timestamps are ISO 8601 strings (UTC).
   set of values. Databases created before this field existed get it added
   automatically via a startup migration (`_migrate_add_task_type` in
   `backend/app/main.py`).
+- **`priority` on `Epic` and `Task`** is one of `"low"`, `"medium"`, `"high"`,
+  `"urgent"` (or `null`), validated by the Pydantic schema (`422` on any other
+  value) — unlike `type`, this one has a fixed, ordered set of values since
+  "highest priority" queries need a rank to sort by. Same startup-migration
+  treatment as `Task.type` (`_migrate_add_priority`).
+- **`GET /api/tasks` query params**: `epic_id`, `swimlane_id`, `priority`
+  (exact match) filter; `q` does a case-insensitive substring match against
+  `title` OR `description`; `sort=priority` orders results highest-priority
+  first (`urgent` > `high` > `medium` > `low` > unset), falling back to the
+  default swimlane/position order otherwise.

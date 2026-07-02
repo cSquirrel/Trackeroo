@@ -43,10 +43,22 @@ def _migrate_add_task_type() -> None:
             conn.execute(text("ALTER TABLE tasks ADD COLUMN type VARCHAR(50)"))
 
 
+def _migrate_add_priority() -> None:
+    """Same story as `_migrate_add_task_type`, for `priority` on tasks/epics."""
+    with engine.begin() as conn:
+        task_columns = {c["name"] for c in inspect(engine).get_columns("tasks")}
+        if "priority" not in task_columns:
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN priority VARCHAR(20)"))
+        epic_columns = {c["name"] for c in inspect(engine).get_columns("epics")}
+        if "priority" not in epic_columns:
+            conn.execute(text("ALTER TABLE epics ADD COLUMN priority VARCHAR(20)"))
+
+
 def _bootstrap() -> None:
     _ensure_sqlite_dir()
     Base.metadata.create_all(engine)
     _migrate_add_task_type()
+    _migrate_add_priority()
 
     with SessionLocal() as db:
         existing = db.scalar(select(Project))

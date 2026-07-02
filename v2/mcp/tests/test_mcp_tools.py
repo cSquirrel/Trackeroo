@@ -75,6 +75,28 @@ def test_create_epic_then_list(mcp_call):
     assert match["title"] == title
 
 
+def test_epic_status_rolls_up_task_counts_by_swimlane(mcp_call):
+    epic = _ok_json(mcp_call("create_epic", {"title": _uniq("epic"), "priority": "high"}))
+    backlog_id = _swimlane_id(mcp_call, "Backlog")
+    done_id = _swimlane_id(mcp_call, "Done")
+
+    t1 = _ok_json(
+        mcp_call("create_task", {"title": _uniq("t"), "swimlane_id": backlog_id, "epic_id": epic["id"]})
+    )
+    _ok_json(
+        mcp_call("create_task", {"title": _uniq("t"), "swimlane_id": backlog_id, "epic_id": epic["id"]})
+    )
+    _ok_json(mcp_call("move_task", {"task_id": t1["id"], "swimlane_id": done_id, "position": 0}))
+
+    status = _ok_json(mcp_call("epic_status", {"epic_id": epic["id"]}))
+    assert status["epic"]["title"] == epic["title"]
+    assert status["epic"]["priority"] == "high"
+    assert status["total_tasks"] == 2
+    assert status["done"] == 1
+    assert status["percent_done"] == 50
+    assert status["by_swimlane"] == {"Backlog": 1, "Done": 1}
+
+
 # --- Tasks ------------------------------------------------------------------
 
 
@@ -87,6 +109,45 @@ def test_create_task_roundtrip_has_empty_nested_arrays(mcp_call):
     assert detail["links"] == []
     assert detail["dependencies"] == []
     assert detail["is_blocked"] is False
+
+
+def test_search_tasks_matches_title_and_description(mcp_call):
+    needle = _uniq("needle")
+    swimlane_id = _swimlane_id(mcp_call, "Backlog")
+    _ok_json(mcp_call("create_task", {"title": needle, "swimlane_id": swimlane_id}))
+    _ok_json(
+        mcp_call(
+            "create_task",
+            {"title": _uniq("other"), "description": needle, "swimlane_id": swimlane_id},
+        )
+    )
+
+    found = _ok_json(mcp_call("search_tasks", {"query": needle}))
+    assert len(found) == 2
+
+    assert _ok_json(mcp_call("search_tasks", {"query": _uniq("no-match")})) == []
+
+
+def test_list_tasks_priority_filter_and_sort(mcp_call):
+    swimlane_id = _swimlane_id(mcp_call, "Review")
+    low = _ok_json(
+        mcp_call("create_task", {"title": _uniq("low"), "swimlane_id": swimlane_id, "priority": "low"})
+    )
+    urgent = _ok_json(
+        mcp_call(
+            "create_task",
+            {"title": _uniq("urgent"), "swimlane_id": swimlane_id, "priority": "urgent"},
+        )
+    )
+
+    only_urgent = _ok_json(mcp_call("list_tasks", {"swimlane_id": swimlane_id, "priority": "urgent"}))
+    assert {t["id"] for t in only_urgent} == {urgent["id"]}
+
+    sorted_tasks = _ok_json(
+        mcp_call("list_tasks", {"swimlane_id": swimlane_id, "sort_by_priority": True})
+    )
+    ids_in_order = [t["id"] for t in sorted_tasks if t["id"] in {low["id"], urgent["id"]}]
+    assert ids_in_order == [urgent["id"], low["id"]]
 
 
 def test_update_task_reflected_in_get_task(mcp_call):

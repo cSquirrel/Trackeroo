@@ -33,6 +33,10 @@ class CommentKind(str, enum.Enum):
     annotation = "annotation"
 
 
+# Ordered low -> high; index doubles as sort rank for "highest priority" queries.
+PRIORITY_LEVELS = ("low", "medium", "high", "urgent")
+
+
 class Project(Base):
     __tablename__ = "projects"
 
@@ -75,6 +79,9 @@ class Epic(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     color: Mapped[str | None] = mapped_column(String(9), nullable=True)
+    # One of PRIORITY_LEVELS; validated in schemas, not a DB constraint (same
+    # tradeoff as Task.type).
+    priority: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )
@@ -97,6 +104,8 @@ class Task(Base):
     # Free-text ticket type ("chore", "fix", "feature", or anything the user
     # wants) — deliberately not an enum/CHECK constraint, so it stays open.
     type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # One of PRIORITY_LEVELS; validated in schemas, not a DB constraint.
+    priority: Mapped[str | None] = mapped_column(String(20), nullable=True)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_blocked: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False

@@ -125,9 +125,19 @@ def list_epics() -> str:
 
 
 @mcp.tool()
-def create_epic(title: str, description: str = "", color: str = "#888888") -> str:
-    """Create an epic. `color` is a hex string like #4f46e5."""
-    payload = {"title": title, "description": description, "color": color}
+def create_epic(
+    title: str,
+    description: str = "",
+    color: str = "#888888",
+    priority: str | None = None,
+) -> str:
+    """Create an epic. `color` is a hex string like #4f46e5.
+
+    `priority` is one of "low", "medium", "high", "urgent" (optional).
+    """
+    payload: dict[str, Any] = {"title": title, "description": description, "color": color}
+    if priority is not None:
+        payload["priority"] = priority
     return _dump(_request("POST", "/api/epics", json=payload))
 
 
@@ -137,8 +147,12 @@ def update_epic(
     title: str | None = None,
     description: str | None = None,
     color: str | None = None,
+    priority: str | None = None,
 ) -> str:
-    """Partially update an epic. Only provided fields are changed."""
+    """Partially update an epic. Only provided fields are changed.
+
+    `priority` is one of "low", "medium", "high", "urgent".
+    """
     payload: dict[str, Any] = {}
     if title is not None:
         payload["title"] = title
@@ -146,21 +160,84 @@ def update_epic(
         payload["description"] = description
     if color is not None:
         payload["color"] = color
+    if priority is not None:
+        payload["priority"] = priority
     return _dump(_request("PATCH", f"/api/epics/{epic_id}", json=payload))
+
+
+@mcp.tool()
+def epic_status(epic_id: int) -> str:
+    """Roll up an epic's progress: task counts by swimlane, done count/percent, blocked count.
+
+    Composes get_epic + get_project (for swimlane names) + list_tasks(epic_id) —
+    there's no stored progress field, this is computed from current task positions.
+    """
+    epic = _request("GET", f"/api/epics/{epic_id}")
+    swimlanes = _request("GET", "/api/project")["swimlanes"]
+    tasks = _request("GET", "/api/tasks", params={"epic_id": epic_id})
+
+    lane_by_id = {lane["id"]: lane for lane in swimlanes}
+    by_swimlane: dict[str, int] = {}
+    done = 0
+    blocked = 0
+    for task in tasks:
+        lane = lane_by_id.get(task["swimlane_id"])
+        name = lane["name"] if lane else f"swimlane {task['swimlane_id']}"
+        by_swimlane[name] = by_swimlane.get(name, 0) + 1
+        if lane and lane.get("is_done_column"):
+            done += 1
+        if task.get("is_blocked"):
+            blocked += 1
+
+    total = len(tasks)
+    return _dump(
+        {
+            "epic": {"id": epic["id"], "title": epic["title"], "priority": epic.get("priority")},
+            "total_tasks": total,
+            "done": done,
+            "percent_done": round(100 * done / total) if total else 0,
+            "blocked": blocked,
+            "by_swimlane": by_swimlane,
+        }
+    )
 
 
 # --- Tasks -----------------------------------------------------------------
 
 
 @mcp.tool()
-def list_tasks(epic_id: int | None = None, swimlane_id: int | None = None) -> str:
-    """List task summaries, optionally filtered by epic and/or swimlane."""
-    params: dict[str, int] = {}
+def list_tasks(
+    epic_id: int | None = None,
+    swimlane_id: int | None = None,
+    priority: str | None = None,
+    sort_by_priority: bool = False,
+) -> str:
+    """List task summaries, optionally filtered by epic, swimlane, and/or priority.
+
+    `priority` filters to an exact level ("low", "medium", "high", "urgent").
+    Set `sort_by_priority=True` to order results highest-priority-first — use
+    this plus `swimlane_id` to answer things like "highest priority tickets in
+    review" (call get_project first to find the "Review" swimlane's id).
+    """
+    params: dict[str, Any] = {}
     if epic_id is not None:
         params["epic_id"] = epic_id
     if swimlane_id is not None:
         params["swimlane_id"] = swimlane_id
+    if priority is not None:
+        params["priority"] = priority
+    if sort_by_priority:
+        params["sort"] = "priority"
     return _dump(_request("GET", "/api/tasks", params=params))
+
+
+@mcp.tool()
+def search_tasks(query: str) -> str:
+    """Full-text search over task title and description (case-insensitive substring match).
+
+    Use this to answer things like "do we have a ticket covering authentication?".
+    """
+    return _dump(_request("GET", "/api/tasks", params={"q": query}))
 
 
 @mcp.tool()
@@ -174,6 +251,7 @@ def create_task(
     title: str,
     description: str = "",
     type: str | None = None,
+    priority: str | None = None,
     epic_id: int | None = None,
     swimlane_id: int | None = None,
 ) -> str:
@@ -182,10 +260,13 @@ def create_task(
     `swimlane_id` is required by the API; call get_project first to find valid
     swimlane ids. `epic_id` is optional. `type` is a free-text ticket type
     ("chore", "fix", "feature", or anything else) — not a fixed enum.
+    `priority` is one of "low", "medium", "high", "urgent" (optional).
     """
     payload: dict[str, Any] = {"title": title, "description": description}
     if type is not None:
         payload["type"] = type
+    if priority is not None:
+        payload["priority"] = priority
     if epic_id is not None:
         payload["epic_id"] = epic_id
     if swimlane_id is not None:
@@ -199,8 +280,12 @@ def update_task(
     title: str | None = None,
     description: str | None = None,
     type: str | None = None,
+    priority: str | None = None,
 ) -> str:
-    """Partially update a task's title, description, and/or type."""
+    """Partially update a task's title, description, type, and/or priority.
+
+    `priority` is one of "low", "medium", "high", "urgent".
+    """
     payload: dict[str, Any] = {}
     if title is not None:
         payload["title"] = title
@@ -208,6 +293,8 @@ def update_task(
         payload["description"] = description
     if type is not None:
         payload["type"] = type
+    if priority is not None:
+        payload["priority"] = priority
     return _dump(_request("PATCH", f"/api/tasks/{task_id}", json=payload))
 
 

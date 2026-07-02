@@ -46,6 +46,58 @@ def test_task_type_is_open_and_optional(client, todo_lane):
     assert cleared.json()["type"] is None
 
 
+def test_task_priority_is_validated_and_optional(client, todo_lane):
+    lane_id = todo_lane["id"]
+
+    unset = make_task(client, lane_id, title="No priority")
+    assert unset["priority"] is None
+
+    urgent = make_task(client, lane_id, title="Fire", priority="urgent")
+    assert urgent["priority"] == "urgent"
+
+    bad = client.post(
+        "/api/tasks",
+        json={"title": "Bad", "swimlane_id": lane_id, "priority": "yesterday"},
+    )
+    assert bad.status_code == 422
+
+    patched = client.patch(f"/api/tasks/{unset['id']}", json={"priority": "low"})
+    assert patched.status_code == 200
+    assert patched.json()["priority"] == "low"
+
+
+def test_search_tasks_by_title_and_description(client, todo_lane):
+    lane_id = todo_lane["id"]
+    make_task(client, lane_id, title="Add OAuth login", description="")
+    make_task(client, lane_id, title="Fix typo", description="mentions authentication flow")
+    make_task(client, lane_id, title="Unrelated", description="")
+
+    by_title = client.get("/api/tasks", params={"q": "oauth"}).json()
+    assert {t["title"] for t in by_title} == {"Add OAuth login"}
+
+    by_description = client.get("/api/tasks", params={"q": "authentication"}).json()
+    assert {t["title"] for t in by_description} == {"Fix typo"}
+
+    none_match = client.get("/api/tasks", params={"q": "nonexistent"}).json()
+    assert none_match == []
+
+
+def test_list_tasks_filters_and_sorts_by_priority(client, todo_lane):
+    lane_id = todo_lane["id"]
+    low = make_task(client, lane_id, title="low", priority="low")
+    urgent = make_task(client, lane_id, title="urgent", priority="urgent")
+    unset = make_task(client, lane_id, title="unset")
+    high = make_task(client, lane_id, title="high", priority="high")
+
+    only_urgent = client.get("/api/tasks", params={"priority": "urgent"}).json()
+    assert [t["id"] for t in only_urgent] == [urgent["id"]]
+
+    sorted_desc = client.get("/api/tasks", params={"sort": "priority"}).json()
+    assert [t["id"] for t in sorted_desc] == [
+        urgent["id"], high["id"], low["id"], unset["id"],
+    ]
+
+
 def test_task_missing_404(client):
     assert client.get("/api/tasks/999").status_code == 404
 
