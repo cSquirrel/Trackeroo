@@ -60,13 +60,15 @@
       error = "Project name cannot contain slashes.";
       return;
     }
-    const parent = await open({
+    const path = await open({
       directory: true,
       multiple: false,
-      title: "Choose where to create the project folder",
+      title: "Choose the project folder",
     });
-    if (typeof parent !== "string") return; // cancelled
-    const path = `${parent.replace(/\/$/, "")}/${name}`;
+    if (typeof path !== "string") return; // cancelled
+    // The chosen folder becomes the project directly — no extra name-based
+    // subfolder nesting. It gains a .trackeroo/ state subfolder, same as any
+    // other project; the typed name is only the board's display title.
     await spawnFor(path, true, "Creating project", name);
   }
 
@@ -106,7 +108,7 @@
           onkeydown={(e) => e.key === "Enter" && createProject()}
         />
         <button class="primary" onclick={createProject} disabled={busy}>
-          Choose location & create…
+          Choose folder & create…
         </button>
       </div>
     </section>
