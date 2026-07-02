@@ -3,6 +3,7 @@
   import * as api from "./api";
   import { describeDependencyError } from "./errors";
   import EpicTag from "./EpicTag.svelte";
+  import { renderMarkdown } from "./markdown";
   import { store } from "./store.svelte";
   import type {
     Comment,
@@ -33,6 +34,11 @@
   let type = $state("");
   let epicId = $state<number | "none">("none");
 
+  // Description edit/preview (GitHub-style: rendered by default, "Edit"
+  // reveals Edit/Preview tabs over a plain-text markdown source).
+  let descriptionEditing = $state(false);
+  let descriptionTab = $state<"edit" | "preview">("edit");
+
   // Comment form
   let commentBody = $state("");
   let commentKind = $state<CommentKind>("comment");
@@ -58,6 +64,8 @@
       description = d.description ?? "";
       type = d.type ?? "";
       epicId = d.epic_id ?? "none";
+      descriptionEditing = false;
+      descriptionTab = "edit";
     } catch (e) {
       localError = e instanceof Error ? e.message : String(e);
     } finally {
@@ -89,6 +97,16 @@
     } catch (e) {
       fail(e);
     }
+  }
+
+  function editDescription() {
+    descriptionEditing = true;
+    descriptionTab = "edit";
+  }
+
+  function cancelEditingDescription() {
+    description = detail?.description ?? "";
+    descriptionEditing = false;
   }
 
   async function block() {
@@ -209,7 +227,11 @@
   );
 </script>
 
-<div class="backdrop" onclick={onclose} role="presentation"></div>
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key === "Escape") onclose();
+  }}
+/>
 <aside class="panel" aria-label="Task detail">
   <header class="panel-head">
     <h2>Task #{taskId}</h2>
@@ -230,10 +252,60 @@
           <span>Title</span>
           <input bind:value={title} />
         </label>
-        <label class="field">
-          <span>Description</span>
-          <textarea rows="4" bind:value={description}></textarea>
-        </label>
+        <div class="field description-field">
+          <div class="field-head">
+            <span>Description</span>
+            {#if !descriptionEditing}
+              <button type="button" class="link" onclick={editDescription}>Edit</button>
+            {/if}
+          </div>
+
+          {#if descriptionEditing}
+            <div class="md-tabs" role="tablist">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={descriptionTab === "edit"}
+                class:active={descriptionTab === "edit"}
+                onclick={() => (descriptionTab = "edit")}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={descriptionTab === "preview"}
+                class:active={descriptionTab === "preview"}
+                onclick={() => (descriptionTab = "preview")}
+              >
+                Preview
+              </button>
+              <button type="button" class="link cancel-edit" onclick={cancelEditingDescription}>
+                Cancel
+              </button>
+            </div>
+            {#if descriptionTab === "edit"}
+              <textarea
+                class="description-editor"
+                rows="18"
+                placeholder="Markdown supported…"
+                bind:value={description}
+              ></textarea>
+            {:else}
+              <div class="markdown-body preview-body">
+                {#if description.trim()}
+                  {@html renderMarkdown(description)}
+                {:else}
+                  <p class="muted">Nothing to preview.</p>
+                {/if}
+              </div>
+            {/if}
+          {:else if description.trim()}
+            <div class="markdown-body">{@html renderMarkdown(description)}</div>
+          {:else}
+            <p class="muted">No description.</p>
+          {/if}
+        </div>
         <label class="field">
           <span>Type</span>
           <input placeholder="chore, fix, feature…" list="task-type-suggestions" bind:value={type} />
@@ -383,21 +455,12 @@
 </aside>
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(15, 23, 42, 0.35);
-    z-index: 40;
-  }
   .panel {
     position: fixed;
-    top: 0;
-    right: 0;
-    width: min(460px, 100vw);
+    inset: 0;
+    width: 100vw;
     height: 100vh;
     background: #fff;
-    border-left: 1px solid #e2e8f0;
-    box-shadow: -8px 0 24px rgba(15, 23, 42, 0.12);
     z-index: 41;
     display: flex;
     flex-direction: column;
@@ -407,7 +470,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 1rem 1.2rem;
+    padding: 1rem 1.6rem;
     border-bottom: 1px solid #e2e8f0;
   }
   .panel-head h2 {
@@ -416,10 +479,14 @@
   }
   .body {
     overflow-y: auto;
-    padding: 1rem 1.2rem 3rem;
+    padding: 1.2rem 1.6rem 3rem;
     display: flex;
     flex-direction: column;
     gap: 1.4rem;
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
   }
   section h3 {
     margin: 0 0 0.5rem;
@@ -622,5 +689,82 @@
     display: flex;
     align-items: center;
     gap: 0.6rem;
+  }
+  .description-field {
+    margin-bottom: 0.7rem;
+  }
+  .field-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.3rem;
+  }
+  .md-tabs {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    border-bottom: 1px solid #e2e8f0;
+    margin-bottom: 0.5rem;
+  }
+  .md-tabs button[role="tab"] {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    padding: 0.4rem 0.7rem;
+    color: #64748b;
+    font-size: 0.85rem;
+  }
+  .md-tabs button[role="tab"].active {
+    color: #1e293b;
+    border-bottom-color: #4f46e5;
+    font-weight: 600;
+  }
+  .md-tabs .cancel-edit {
+    margin-left: auto;
+  }
+  .description-editor {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    min-height: 320px;
+  }
+  .markdown-body {
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    font-size: 0.88rem;
+    color: #1e293b;
+    line-height: 1.55;
+  }
+  .markdown-body :global(> :first-child) {
+    margin-top: 0;
+  }
+  .markdown-body :global(> :last-child) {
+    margin-bottom: 0;
+  }
+  .markdown-body :global(pre) {
+    background: #f8fafc;
+    border-radius: 6px;
+    padding: 0.6rem 0.8rem;
+    overflow-x: auto;
+  }
+  .markdown-body :global(code) {
+    background: #f1f5f9;
+    border-radius: 4px;
+    padding: 0.1em 0.35em;
+    font-size: 0.85em;
+  }
+  .markdown-body :global(pre code) {
+    background: none;
+    padding: 0;
+  }
+  .markdown-body :global(blockquote) {
+    margin: 0.5em 0;
+    padding-left: 0.8em;
+    border-left: 3px solid #e2e8f0;
+    color: #475569;
+  }
+  .preview-body {
+    min-height: 320px;
   }
 </style>

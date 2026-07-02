@@ -18,6 +18,7 @@
     "@testing-library/svelte": "^5.4.2",
     "@testing-library/user-event": "^14.6.1",
     "@tsconfig/svelte": "^5.0.8",
+    "@types/dompurify": "^3.0.5",
     "@types/node": "^24.13.2",
     "@vitest/coverage-v8": "^4.1.9",
     "jsdom": "^29.1.1",
@@ -30,6 +31,8 @@
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.1",
+    "dompurify": "^3.4.11",
+    "marked": "^18.0.5",
     "svelte-dnd-action": "^0.9.70"
   }
 }

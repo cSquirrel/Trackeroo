@@ -124,6 +124,51 @@ describe("TaskDetailPanel", () => {
     );
   });
 
+  it("shows rendered markdown by default and switches to the editor via Edit", async () => {
+    vi.mocked(api.getTask).mockResolvedValue(
+      makeDetail({ description: "**bold** text" }),
+    );
+    render(TaskDetailPanel, { props: props() });
+    await screen.findByDisplayValue("Login form");
+
+    expect(document.querySelector(".markdown-body strong")?.textContent).toBe("bold");
+    expect(screen.queryByPlaceholderText("Markdown supported…")).toBeNull();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByPlaceholderText("Markdown supported…")).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Edit" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Preview" })).toBeTruthy();
+  });
+
+  it("renders the Preview tab from the in-progress edit, not the saved value", async () => {
+    vi.mocked(api.getTask).mockResolvedValue(makeDetail({ description: "old" }));
+    render(TaskDetailPanel, { props: props() });
+    await screen.findByDisplayValue("Login form");
+
+    await fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await fireEvent.input(screen.getByPlaceholderText("Markdown supported…"), {
+      target: { value: "# heading" },
+    });
+    await fireEvent.click(screen.getByRole("tab", { name: "Preview" }));
+
+    expect(document.querySelector(".markdown-body h1")?.textContent).toBe("heading");
+  });
+
+  it("Cancel discards the in-progress description edit", async () => {
+    vi.mocked(api.getTask).mockResolvedValue(makeDetail({ description: "original" }));
+    render(TaskDetailPanel, { props: props() });
+    await screen.findByDisplayValue("Login form");
+
+    await fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    await fireEvent.input(screen.getByPlaceholderText("Markdown supported…"), {
+      target: { value: "discard me" },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByPlaceholderText("Markdown supported…")).toBeNull();
+    expect(document.querySelector(".markdown-body")?.textContent?.trim()).toBe("original");
+  });
+
   it("blocks comment submission when no author is set", async () => {
     render(TaskDetailPanel, { props: props() });
     await screen.findByDisplayValue("Login form");
