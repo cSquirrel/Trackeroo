@@ -4,7 +4,7 @@
 
 A lightweight task tracker: epics → tasks, configurable kanban swim lanes, dependencies, blockers, comments/annotations, and links to PRs or Slack threads — plus an MCP server so AI agents can create and update tasks directly. v2 packages this as a native macOS desktop app instead of a self-hosted web service, since the target use case is a single user on a single machine with no remote access ever needed.
 
-**Multiple projects, vault-style.** Each project is just a folder that contains a `trackeroo.db` file (one SQLite database = one project). You pick projects the way Obsidian picks vaults: the app opens a **project picker** on every launch, and you can have several projects open at once — each in its own window and its own OS process. Projects are ordinary folders, so you can move, copy, back up, or sync them however you like.
+**Multiple projects, vault-style.** Each project is just a folder — Trackeroo keeps all of its own state (database, the port its backend is currently running on, anything added later) inside a `.trackeroo/` subfolder within it, so the rest of the folder stays yours. One project = one folder. You pick projects the way Obsidian picks vaults: the app opens a **project picker** on every launch, and you can have several projects open at once — each in its own window and its own OS process. Projects are ordinary folders, so you can move, copy, back up, or sync them however you like — `.gitignore` the single `.trackeroo/` entry if you version the folder yourself and don't want the database tracked.
 
 ## Quickstart
 
@@ -34,7 +34,7 @@ npm install
 npm run dev
 ```
 
-This compiles the Rust shell and opens a native window showing the project picker. No backend runs until you pick a project; choosing one spawns the backend (from `backend/.venv` in dev) on a free port picked at runtime, pointed at that project's `trackeroo.db`.
+This compiles the Rust shell and opens a native window showing the project picker. No backend runs until you pick a project; choosing one spawns the backend (from `backend/.venv` in dev) on a free port picked at runtime, pointed at that project's `.trackeroo/trackeroo.db`.
 
 ### Building a release bundle
 
@@ -71,9 +71,9 @@ Note: `--collect-submodules mcp.server` (not the whole `mcp` package) — the pa
 
 Every launched window shows the picker first (no board until you choose a project):
 
-- **New project** — type a name, then pick (via a native folder dialog) *where* to put it. The app creates a `<location>/<name>/` folder containing a fresh `trackeroo.db`, seeded with the default swim lanes, and titles the board with the name you typed.
-- **Open project** — pick an existing project folder (one that already contains a `trackeroo.db`) via the native folder dialog. If the folder has no `trackeroo.db`, the picker shows an error instead of proceeding.
-- **Recent projects** — a one-click list of folders you've opened before. Entries whose folder no longer has a `trackeroo.db` (moved or deleted) are hidden automatically.
+- **New project** — type a name, then pick (via a native folder dialog) *where* to put it. The app creates a `<location>/<name>/` folder with a `.trackeroo/trackeroo.db` inside, seeded with the default swim lanes, and titles the board with the name you typed.
+- **Open project** — pick an existing project folder (one that already contains a `.trackeroo/trackeroo.db`) via the native folder dialog. If the folder has no database, the picker shows an error instead of proceeding.
+- **Recent projects** — a one-click list of folders you've opened before. Entries whose folder no longer has a database (moved or deleted) are hidden automatically.
 
 Once a project is open, the board's top bar has an **"Open project…"** button. It launches a brand-new, fully independent copy of the app (a separate OS process) that shows its own picker from scratch. Your current window keeps running its own project, untouched — there is no in-window project switching, and no "which project" is handed to the new process. Close a window to quit that project's process (its backend is shut down with it).
 
@@ -90,7 +90,7 @@ You can skip the picker and open a project folder directly by passing its path w
 open -n /Applications/Trackeroo.app --args /path/to/my-project
 ```
 
-The path must be an existing folder. It does **not** need to already contain a `trackeroo.db` — a fresh, empty folder becomes a new project; a folder that already has a `trackeroo.db` opens with its existing data. If the argument is missing or points at something that isn't a folder, the app just shows the normal picker (with an inline error if the path was invalid, so a typo isn't swallowed silently).
+The path must be an existing folder. It does **not** need to already contain a `.trackeroo/` subfolder — a fresh, empty folder becomes a new project; a folder that already has one opens with its existing data. If the argument is missing or points at something that isn't a folder, the app just shows the normal picker (with an inline error if the path was invalid, so a typo isn't swallowed silently).
 
 This is only for external launches. The in-window "Open project…" button always opens a fresh picker (it never carries a path), exactly as described above.
 
@@ -104,7 +104,7 @@ This is only for external launches. The in-window "Open project…" button alway
 
 ## Where your data lives
 
-- **Your projects**: wherever you chose to create or open them. Each project folder holds a single `trackeroo.db`. In dev mode, if you haven't picked a project, nothing is created — the picker just waits.
+- **Your projects**: wherever you chose to create or open them. Each project folder holds a `.trackeroo/` subfolder containing `trackeroo.db` (and, while the app has it open, a `port` file). Projects created before this layout existed are migrated automatically the next time they're opened — the old loose `trackeroo.db` is moved into `.trackeroo/`, no data lost. In dev mode, if you haven't picked a project, nothing is created — the picker just waits.
 - **Recent-projects list**: `~/Library/Application Support/com.trackeroo.desktop/recent_projects.json` — a small JSON array of `{ "path", "name" }` entries, most-recent-first. Deleting it just clears the "Recent" list; your projects are unaffected.
 
 ## Data model

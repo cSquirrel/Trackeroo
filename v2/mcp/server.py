@@ -5,7 +5,7 @@ binds to a fresh, unpredictable port every time a project is opened (that's
 what lets multiple projects run at once), so a hardcoded URL goes stale the
 moment the app restarts. Point this at the project folder instead via
 TRACKEROO_PROJECT_PATH, and it discovers the live port by reading
-"<project>/.trackeroo-port" (written by the app on every backend spawn) before
+"<project>/.trackeroo/port" (written by the app on every backend spawn) before
 each request. TRACKEROO_API_URL remains supported as a direct override for
 cases where a fixed URL is genuinely correct (e.g. v1's Docker deployment).
 """
@@ -39,7 +39,7 @@ def _resolve_base_url() -> str:
     if _EXPLICIT_API_URL:
         return _EXPLICIT_API_URL.rstrip("/")
     if _PROJECT_PATH:
-        port_file = Path(_PROJECT_PATH) / ".trackeroo-port"
+        port_file = Path(_PROJECT_PATH) / ".trackeroo" / "port"
         try:
             port = port_file.read_text().strip()
         except FileNotFoundError:

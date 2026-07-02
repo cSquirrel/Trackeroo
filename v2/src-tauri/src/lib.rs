@@ -51,7 +51,7 @@ fn project_folder_slot() -> &'static Mutex<Option<PathBuf>> {
 /// hardcoded port in its config (which goes stale the moment the port changes
 /// on the next launch).
 fn port_file_path(folder: &Path) -> PathBuf {
-    folder.join(".trackeroo-port")
+    state_dir(folder).join("port")
 }
 
 fn kill_backend() {
@@ -200,13 +200,18 @@ fn record_recent(app: &tauri::AppHandle, path: &str, name: &str) {
     }
 }
 
-/// Recent projects, filtered to those whose `trackeroo.db` still exists (folders
-/// can be moved or deleted out from under us).
+/// Recent projects, filtered to those whose database still exists (folders
+/// can be moved or deleted out from under us). Checks both the current
+/// `.trackeroo/trackeroo.db` layout and the pre-migration flat layout, since
+/// a recent entry might not have been reopened (and thus migrated) yet.
 #[tauri::command]
 fn list_recent_projects(app: tauri::AppHandle) -> Vec<RecentProject> {
     read_recent(&app)
         .into_iter()
-        .filter(|r| PathBuf::from(&r.path).join("trackeroo.db").exists())
+        .filter(|r| {
+            let folder = PathBuf::from(&r.path);
+            db_path_for(&folder).exists() || folder.join("trackeroo.db").exists()
+        })
         .collect()
 }
 
@@ -260,14 +265,48 @@ fn get_launch_target() -> LaunchTarget {
     LAUNCH_TARGET.get().cloned().unwrap_or_default()
 }
 
+/// All Trackeroo state for a project (database, port file, and anything
+/// added later) lives under this subfolder, not loose in the project root —
+/// keeps a project folder tidy and easy to `.gitignore` as one entry if the
+/// user versions the folder themselves.
+const STATE_DIR_NAME: &str = ".trackeroo";
+
+fn state_dir(folder: &Path) -> PathBuf {
+    folder.join(STATE_DIR_NAME)
+}
+
+fn db_path_for(folder: &Path) -> PathBuf {
+    state_dir(folder).join("trackeroo.db")
+}
+
+/// Projects created before the `.trackeroo/` subfolder existed have their
+/// database loose at `<folder>/trackeroo.db`. Move it into the subfolder the
+/// first time such a project is opened post-update; a no-op for anything
+/// already migrated (including brand-new projects, which never had the old
+/// layout). Best-effort: a failed migration falls through to the normal
+/// missing-database handling in `open_project` rather than panicking.
+fn migrate_legacy_layout(folder: &Path) {
+    let new_path = db_path_for(folder);
+    if new_path.exists() {
+        return;
+    }
+    let legacy_path = folder.join("trackeroo.db");
+    if !legacy_path.exists() {
+        return;
+    }
+    if fs::create_dir_all(state_dir(folder)).is_ok() {
+        let _ = fs::rename(&legacy_path, &new_path);
+    }
+}
+
 /// Open (or create) the project whose folder is `path`, spawn a backend for its
-/// `trackeroo.db` on a freshly chosen free port, wait for health, record it in
-/// the recent list, and return the port so the frontend can point its API client
-/// at it.
+/// `.trackeroo/trackeroo.db` on a freshly chosen free port, wait for health,
+/// record it in the recent list, and return the port so the frontend can point
+/// its API client at it.
 ///
 /// - `create`: when true, the folder is created if missing (New Project); when
-///   false, an existing `trackeroo.db` is required (Open Project) and its
-///   absence is an error.
+///   false, an existing database is required (Open Project) and its absence
+///   is an error.
 /// - `name`: display label for the recent list; falls back to the folder name.
 ///
 /// Runs on a separate thread (`command(async)`): spawning the backend and
@@ -282,10 +321,11 @@ fn open_project(
     name: Option<String>,
 ) -> Result<u16, String> {
     let folder = PathBuf::from(&path);
-    let db_path = folder.join("trackeroo.db");
+    migrate_legacy_layout(&folder);
+    let db_path = db_path_for(&folder);
 
     if create {
-        fs::create_dir_all(&folder)
+        fs::create_dir_all(state_dir(&folder))
             .map_err(|e| format!("Could not create project folder: {e}"))?;
     } else if !db_path.exists() {
         return Err(format!(

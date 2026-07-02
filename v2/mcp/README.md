@@ -22,7 +22,7 @@ folder** instead, and it discovers the live port automatically:
 export TRACKEROO_PROJECT_PATH="/path/to/your/project"
 ```
 
-It reads `<project>/.trackeroo-port` (written by the app every time it spawns
+It reads `<project>/.trackeroo/port` (written by the app every time it spawns
 a backend) fresh before each request, so it keeps working across app
 restarts with no config changes — as long as that project is currently open
 in Trackeroo. If it isn't, you'll get a clear error telling you to open it
