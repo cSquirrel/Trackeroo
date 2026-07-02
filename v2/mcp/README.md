@@ -84,6 +84,8 @@ Restart Claude Desktop after editing the config.
 ## Tools
 
 - `get_project` — project config + swimlanes (call first to discover swimlane ids)
+- `create_swimlane`, `update_swimlane`, `delete_swimlane`, `reorder_swimlanes`
+  (no `list_swimlanes` tool — `get_project` already returns them, ordered)
 - `list_epics`, `create_epic`, `update_epic`, `epic_status` — rollup of an
   epic's progress: task counts by swimlane, done %, blocked count
 - `list_tasks` — filter by `epic_id`/`swimlane_id`/`priority`, or set
