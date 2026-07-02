@@ -18,6 +18,17 @@
 
   store.loadAll();
 
+  // ponytail: poll instead of websockets — single local user hitting a
+  // localhost backend, so a cheap interval beats a push channel. Bump to
+  // SSE only if external writers (MCP) need sub-second latency.
+  $effect(() => {
+    const id = setInterval(() => {
+      store.refreshTasks();
+      store.refreshEpics();
+    }, 3000);
+    return () => clearInterval(id);
+  });
+
   function openTask(id: number) {
     selectedTaskId = id;
   }
