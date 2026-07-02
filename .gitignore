@@ -26,6 +26,9 @@ data/
 /v2/backend/build/
 /v2/backend/dist/
 /v2/backend/*.spec
+/v2/mcp/build/
+/v2/mcp/dist/
+/v2/mcp/*.spec
 
 # macOS
 .DS_Store

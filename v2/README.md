@@ -38,10 +38,10 @@ This compiles the Rust shell and opens a native window showing the project picke
 
 ### Building a release bundle
 
-Two steps, because the backend is bundled as a PyInstaller-compiled binary that `npm run build` does not rebuild automatically:
+Three steps — the backend and MCP server are both bundled as PyInstaller-compiled binaries that `npm run build` does not rebuild automatically:
 
 ```bash
-# 1. Build the sidecar binary (repeat after any backend code change)
+# 1. Build the backend sidecar (repeat after any backend code change)
 cd backend
 .venv/bin/pip install pyinstaller
 .venv/bin/pyinstaller --onefile --name trackeroo-backend-aarch64-apple-darwin \
@@ -51,11 +51,21 @@ mkdir -p ../src-tauri/binaries
 cp dist/trackeroo-backend-aarch64-apple-darwin ../src-tauri/binaries/
 cd ..
 
-# 2. Build the app
+# 2. Build the MCP server sidecar (repeat after any mcp/ code change)
+cd mcp
+.venv/bin/pip install pyinstaller
+.venv/bin/pyinstaller --onefile --name trackeroo-mcp-aarch64-apple-darwin \
+  --collect-submodules mcp.server --paths . server.py
+cp dist/trackeroo-mcp-aarch64-apple-darwin ../src-tauri/binaries/
+cd ..
+
+# 3. Build the app
 npm run build
 ```
 
-Produces `src-tauri/target/release/bundle/macos/Trackeroo.app` and a `.dmg` alongside it. Both the compiled sidecar and the build output are gitignored — rebuild after a fresh clone.
+Produces `src-tauri/target/release/bundle/macos/Trackeroo.app` and a `.dmg` alongside it, both containing the MCP server as a real executable (`Contents/MacOS/trackeroo-mcp`) — the app is fully self-contained, installable on a fresh machine with no Python/pip/venv needed for either the backend or MCP. Both compiled sidecars and the build output are gitignored — rebuild after a fresh clone.
+
+Note: `--collect-submodules mcp.server` (not the whole `mcp` package) — the package's optional `mcp.cli` submodule depends on `typer`, which isn't installed and isn't needed (we only use `mcp.server.fastmcp`).
 
 ## The project picker
 
@@ -90,7 +100,7 @@ This is only for external launches. The in-window "Open project…" button alway
 - **Task detail** — description, comments and annotations, block/unblock with a reason, dependency links to other tasks, and links out to PRs or Slack threads.
 - **Epics** — group related tasks; manage epics from their own view.
 - **Swim lane config** — add, rename, reorder, or remove columns; mark one as the "done" column (used for dependency warnings).
-- **MCP server** — see [`mcp/README.md`](mcp/README.md) for the Claude Code/Desktop registration snippet. Same 15 tools as v1. Note: the MCP server talks to a project's backend over HTTP via `TRACKEROO_API_URL`, but v2's backend port is now chosen dynamically per project (see below), so point the MCP server at the port of the specific project process you want it to drive.
+- **MCP server** — bundled into the app as `Contents/MacOS/trackeroo-mcp`, a real executable (no Python/pip/venv needed to use it). Same 15 tools as v1. Point it at a project by folder, not port — `TRACKEROO_PROJECT_PATH=/path/to/project` — it discovers the live port automatically and keeps working across app restarts. See [`mcp/README.md`](mcp/README.md) for the Claude Code/Desktop registration snippet.
 
 ## Where your data lives
 
@@ -106,7 +116,7 @@ v2's backend is a copy of v1's — the REST contract is identical. Full field-le
 ```
 backend/     FastAPI + SQLite REST API — a copy of v1/backend; DB path + port come from env vars per project
 frontend/    Svelte + Vite UI — a copy of v1/frontend, adapted for the Tauri webview; project picker + board
-mcp/         MCP server — point TRACKEROO_API_URL at the running project's http://localhost:<port>
+mcp/         MCP server — bundled into the app; point TRACKEROO_PROJECT_PATH at a project folder
 src-tauri/   Rust shell: shows the picker, spawns/health-checks/kills a per-project backend, hosts the webview
 ```
 
@@ -115,7 +125,7 @@ src-tauri/   Rust shell: shows the picker, spawns/health-checks/kills a per-proj
 - **Cold-start delay after picking a project**: the webview starts fetching as soon as a project is chosen, before the freshly-spawned sidecar is guaranteed to be listening. The release build's PyInstaller sidecar has real self-extraction overhead (~9s measured on this machine), so the board briefly shows a loading state before it appears — this is expected, not a bug (see `CLAUDE.md`).
 - **Same project open in two windows**: nothing stops you opening the same project folder in two processes. SQLite's own locking handles low-rate concurrent access; heavy simultaneous writes from both could surface a transient "database is locked" error. This is an accepted edge case, not a supported workflow.
 - **Unsigned build**: the `.app`/`.dmg` are ad-hoc signed only (no Apple Developer signing identity configured). macOS Gatekeeper will warn on first launch — right-click → Open, or allow via System Settings → Privacy & Security.
-- **Sidecar binary naming**: must exactly match Tauri's `<name>-<target-triple>` convention — currently `trackeroo-backend-aarch64-apple-darwin` for Apple Silicon. See `src-tauri/tauri.conf.json`'s `bundle.externalBin`.
+- **Sidecar binary naming**: must exactly match Tauri's `<name>-<target-triple>` convention — currently `trackeroo-backend-aarch64-apple-darwin` and `trackeroo-mcp-aarch64-apple-darwin` for Apple Silicon. See `src-tauri/tauri.conf.json`'s `bundle.externalBin`.
 
 ## Versioning
 
