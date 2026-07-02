@@ -154,15 +154,19 @@ def get_task(task_id: int) -> str:
 def create_task(
     title: str,
     description: str = "",
+    type: str | None = None,
     epic_id: int | None = None,
     swimlane_id: int | None = None,
 ) -> str:
     """Create a task.
 
     `swimlane_id` is required by the API; call get_project first to find valid
-    swimlane ids. `epic_id` is optional.
+    swimlane ids. `epic_id` is optional. `type` is a free-text ticket type
+    ("chore", "fix", "feature", or anything else) — not a fixed enum.
     """
     payload: dict[str, Any] = {"title": title, "description": description}
+    if type is not None:
+        payload["type"] = type
     if epic_id is not None:
         payload["epic_id"] = epic_id
     if swimlane_id is not None:
@@ -175,13 +179,16 @@ def update_task(
     task_id: int,
     title: str | None = None,
     description: str | None = None,
+    type: str | None = None,
 ) -> str:
-    """Partially update a task's title and/or description."""
+    """Partially update a task's title, description, and/or type."""
     payload: dict[str, Any] = {}
     if title is not None:
         payload["title"] = title
     if description is not None:
         payload["description"] = description
+    if type is not None:
+        payload["type"] = type
     return _dump(_request("PATCH", f"/api/tasks/{task_id}", json=payload))
 
 

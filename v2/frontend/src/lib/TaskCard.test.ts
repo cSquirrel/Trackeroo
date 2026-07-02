@@ -11,6 +11,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     swimlane_id: 2,
     title: "Login form",
     description: null,
+    type: null,
     position: 0,
     is_blocked: false,
     blocked_reason: null,
@@ -47,6 +48,17 @@ describe("TaskCard", () => {
   it("omits the epic tag when the task has no epic", () => {
     render(TaskCard, { props: { task: makeTask({ epic_id: null }), onopen: vi.fn() } });
     expect(screen.queryByText("Auth")).toBeNull();
+  });
+
+  it("shows the type badge only when a type is set", () => {
+    const { unmount } = render(TaskCard, {
+      props: { task: makeTask({ type: null }), onopen: vi.fn() },
+    });
+    expect(screen.queryByText("chore")).toBeNull();
+    unmount();
+
+    render(TaskCard, { props: { task: makeTask({ type: "chore" }), onopen: vi.fn() } });
+    expect(screen.getByText("chore")).toBeTruthy();
   });
 
   it("renders a blocked indicator only when the task is blocked", () => {

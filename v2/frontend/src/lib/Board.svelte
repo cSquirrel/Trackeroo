@@ -13,6 +13,7 @@
   let warnings = $state<string[]>([]);
   let newTaskLane = $state<number | null>(null);
   let newTaskTitle = $state("");
+  let newTaskType = $state("");
 
   function matchesFilter(t: Task): boolean {
     return epicFilter === "all" || t.epic_id === epicFilter;
@@ -71,9 +72,14 @@
     const title = newTaskTitle.trim();
     if (!title) return;
     try {
-      const task = await api.createTask({ title, swimlane_id: laneId });
+      const task = await api.createTask({
+        title,
+        swimlane_id: laneId,
+        type: newTaskType.trim() || null,
+      });
       store.upsertTask(task);
       newTaskTitle = "";
+      newTaskType = "";
       newTaskLane = null;
       rebuild();
     } catch (err) {
@@ -81,6 +87,14 @@
     }
   }
 </script>
+
+<datalist id="task-type-suggestions">
+  <option value="chore"></option>
+  <option value="fix"></option>
+  <option value="feature"></option>
+  <option value="bug"></option>
+  <option value="docs"></option>
+</datalist>
 
 <div class="toolbar">
   <label>
@@ -131,6 +145,11 @@
         <form class="add-form" onsubmit={(e) => { e.preventDefault(); addTask(col.lane.id); }}>
           <!-- svelte-ignore a11y_autofocus -->
           <input placeholder="Task title" bind:value={newTaskTitle} autofocus />
+          <input
+            placeholder="Type (optional)"
+            list="task-type-suggestions"
+            bind:value={newTaskType}
+          />
           <div class="add-actions">
             <button type="submit" class="primary">Add</button>
             <button type="button" class="link" onclick={() => (newTaskLane = null)}>
@@ -141,7 +160,7 @@
       {:else}
         <button
           class="add-btn"
-          onclick={() => { newTaskLane = col.lane.id; newTaskTitle = ""; }}
+          onclick={() => { newTaskLane = col.lane.id; newTaskTitle = ""; newTaskType = ""; }}
         >
           + Add task
         </button>

@@ -22,9 +22,10 @@
       </span>
     {/if}
   </div>
-  {#if epic}
+  {#if epic || task.type}
     <div class="tags">
-      <EpicTag {epic} />
+      {#if task.type}<span class="type-badge">{task.type}</span>{/if}
+      {#if epic}<EpicTag {epic} />{/if}
     </div>
   {/if}
 </button>
@@ -74,5 +75,19 @@
   }
   .tags {
     margin-top: 0.45rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+  }
+  .type-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #475569;
+    background: #f1f5f9;
+    border-radius: 4px;
+    padding: 0.1em 0.4em;
   }
 </style>

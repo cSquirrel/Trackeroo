@@ -25,6 +25,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     swimlane_id: 2,
     title: "Login form",
     description: null,
+    type: null,
     position: 0,
     is_blocked: false,
     blocked_reason: null,

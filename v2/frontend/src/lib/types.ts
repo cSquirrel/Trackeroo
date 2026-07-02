@@ -32,6 +32,9 @@ export interface Task {
   swimlane_id: number;
   title: string;
   description: string | null;
+  // Free-text ticket type ("chore", "fix", "feature", or anything the user
+  // wants) — deliberately open, not a fixed enum.
+  type: string | null;
   position: number;
   is_blocked: boolean;
   blocked_reason: string | null;
@@ -108,12 +111,14 @@ export interface TaskCreate {
   swimlane_id: number;
   epic_id?: number | null;
   description?: string | null;
+  type?: string | null;
   position?: number;
 }
 
 export interface TaskUpdate {
   title?: string;
   description?: string | null;
+  type?: string | null;
   epic_id?: number | null;
   swimlane_id?: number;
   position?: number;

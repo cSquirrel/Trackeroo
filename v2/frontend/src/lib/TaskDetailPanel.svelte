@@ -30,6 +30,7 @@
   // Editable fields
   let title = $state("");
   let description = $state("");
+  let type = $state("");
   let epicId = $state<number | "none">("none");
 
   // Comment form
@@ -55,6 +56,7 @@
       detail = d;
       title = d.title;
       description = d.description ?? "";
+      type = d.type ?? "";
       epicId = d.epic_id ?? "none";
     } catch (e) {
       localError = e instanceof Error ? e.message : String(e);
@@ -78,6 +80,7 @@
       const updated = await api.updateTask(detail.id, {
         title: title.trim() || detail.title,
         description: description.trim() ? description : null,
+        type: type.trim() || null,
         epic_id: epicId === "none" ? null : epicId,
       });
       store.upsertTask(updated);
@@ -230,6 +233,10 @@
         <label class="field">
           <span>Description</span>
           <textarea rows="4" bind:value={description}></textarea>
+        </label>
+        <label class="field">
+          <span>Type</span>
+          <input placeholder="chore, fix, feature…" list="task-type-suggestions" bind:value={type} />
         </label>
         <label class="field">
           <span>Epic</span>

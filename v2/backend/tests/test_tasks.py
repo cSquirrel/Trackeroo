@@ -23,6 +23,29 @@ def test_task_crud_and_detail(client, todo_lane):
     assert client.get(f"/api/tasks/{task['id']}").status_code == 404
 
 
+def test_task_type_is_open_and_optional(client, todo_lane):
+    lane_id = todo_lane["id"]
+
+    untyped = make_task(client, lane_id, title="No type set")
+    assert untyped["type"] is None
+
+    chore = make_task(client, lane_id, title="Tidy up", type="chore")
+    assert chore["type"] == "chore"
+
+    # Deliberately not an enum: any string is accepted, including one not in
+    # the usual chore/fix/feature suggestions.
+    custom = make_task(client, lane_id, title="Something else", type="spike")
+    assert custom["type"] == "spike"
+
+    patched = client.patch(f"/api/tasks/{untyped['id']}", json={"type": "fix"})
+    assert patched.status_code == 200
+    assert patched.json()["type"] == "fix"
+
+    cleared = client.patch(f"/api/tasks/{untyped['id']}", json={"type": None})
+    assert cleared.status_code == 200
+    assert cleared.json()["type"] is None
+
+
 def test_task_missing_404(client):
     assert client.get("/api/tasks/999").status_code == 404
 

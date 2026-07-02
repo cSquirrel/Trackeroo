@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import inspect, select, text
 
 from .database import DATABASE_URL, Base, SessionLocal, engine
 from .models import Project, SwimLane
@@ -33,9 +33,20 @@ def _ensure_sqlite_dir() -> None:
             os.makedirs(directory, exist_ok=True)
 
 
+def _migrate_add_task_type() -> None:
+    """`create_all` only creates missing tables, not missing columns on
+    existing ones — add `tasks.type` for databases created before this field
+    existed. Cheap and idempotent; safe to run on every startup."""
+    columns = {c["name"] for c in inspect(engine).get_columns("tasks")}
+    if "type" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN type VARCHAR(50)"))
+
+
 def _bootstrap() -> None:
     _ensure_sqlite_dir()
     Base.metadata.create_all(engine)
+    _migrate_add_task_type()
 
     with SessionLocal() as db:
         existing = db.scalar(select(Project))

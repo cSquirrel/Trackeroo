@@ -174,6 +174,9 @@ class TaskDependencyOut(BaseModel):
 class TaskBase(BaseModel):
     title: str
     description: str | None = None
+    # Free-text ticket type ("chore", "fix", "feature", or anything the user
+    # wants) — deliberately open, not a fixed enum.
+    type: str | None = None
     epic_id: int | None = None
     swimlane_id: int
     position: int = 0
@@ -186,6 +189,7 @@ class TaskCreate(TaskBase):
 class TaskUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
+    type: str | None = None
     epic_id: int | None = None
     swimlane_id: int | None = None
     position: int | None = None
@@ -201,6 +205,7 @@ class TaskOut(BaseModel):
     id: int
     title: str
     description: str | None = None
+    type: str | None = None
     epic_id: int | None = None
     swimlane_id: int
     position: int
