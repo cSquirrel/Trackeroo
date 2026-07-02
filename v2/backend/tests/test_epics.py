@@ -29,6 +29,21 @@ def test_epic_crud(client):
     assert client.get(f"/api/epics/{epic['id']}").status_code == 404
 
 
+def test_epic_priority_is_validated_and_optional(client):
+    unset = client.post("/api/epics", json={"title": "E"}).json()
+    assert unset["priority"] is None
+
+    high = client.post("/api/epics", json={"title": "E2", "priority": "high"}).json()
+    assert high["priority"] == "high"
+
+    bad = client.post("/api/epics", json={"title": "Bad", "priority": "nope"})
+    assert bad.status_code == 422
+
+    patched = client.patch(f"/api/epics/{unset['id']}", json={"priority": "urgent"})
+    assert patched.status_code == 200
+    assert patched.json()["priority"] == "urgent"
+
+
 def test_get_missing_epic_404(client):
     assert client.get("/api/epics/999").status_code == 404
 

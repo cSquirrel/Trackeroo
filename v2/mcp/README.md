@@ -84,8 +84,14 @@ Restart Claude Desktop after editing the config.
 ## Tools
 
 - `get_project` — project config + swimlanes (call first to discover swimlane ids)
-- `list_epics`, `create_epic`, `update_epic`
-- `list_tasks`, `get_task`, `create_task`, `update_task`
+- `list_epics`, `create_epic`, `update_epic`, `epic_status` — rollup of an
+  epic's progress: task counts by swimlane, done %, blocked count
+- `list_tasks` — filter by `epic_id`/`swimlane_id`/`priority`, or set
+  `sort_by_priority=True` for highest-priority-first (e.g. "highest priority
+  tickets in review")
+- `search_tasks` — case-insensitive substring match over title/description
+  (e.g. "do we have a ticket covering authentication?")
+- `get_task`, `create_task`, `update_task`
 - `move_task` — reorder/move into a swimlane; surfaces any soft `warnings`
 - `block_task`, `unblock_task`
 - `add_comment`

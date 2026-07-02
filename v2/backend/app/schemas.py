@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
 from .models import CommentKind, LinkType
+
+Priority = Literal["low", "medium", "high", "urgent"]
 
 # ---------------------------------------------------------------------------
 # SwimLane
@@ -73,6 +76,7 @@ class EpicBase(BaseModel):
     title: str
     description: str | None = None
     color: str | None = None
+    priority: Priority | None = None
 
 
 class EpicCreate(EpicBase):
@@ -83,6 +87,7 @@ class EpicUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     color: str | None = None
+    priority: Priority | None = None
 
 
 class EpicOut(EpicBase):
@@ -177,6 +182,7 @@ class TaskBase(BaseModel):
     # Free-text ticket type ("chore", "fix", "feature", or anything the user
     # wants) — deliberately open, not a fixed enum.
     type: str | None = None
+    priority: Priority | None = None
     epic_id: int | None = None
     swimlane_id: int
     position: int = 0
@@ -190,6 +196,7 @@ class TaskUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     type: str | None = None
+    priority: Priority | None = None
     epic_id: int | None = None
     swimlane_id: int | None = None
     position: int | None = None
@@ -206,6 +213,7 @@ class TaskOut(BaseModel):
     title: str
     description: str | None = None
     type: str | None = None
+    priority: Priority | None = None
     epic_id: int | None = None
     swimlane_id: int
     position: int

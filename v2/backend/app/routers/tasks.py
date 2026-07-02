@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import case, or_, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Comment, SwimLane, Task, TaskDependency, TaskLink
+from ..models import PRIORITY_LEVELS, Comment, SwimLane, Task, TaskDependency, TaskLink
 from ..schemas import (
     CommentCreate,
     CommentOut,
@@ -36,6 +36,9 @@ def _get_task(db: Session, task_id: int) -> Task:
 def list_tasks(
     epic_id: int | None = None,
     swimlane_id: int | None = None,
+    priority: str | None = None,
+    q: str | None = None,
+    sort: str | None = None,
     db: Session = Depends(get_db),
 ) -> list[Task]:
     stmt = select(Task)
@@ -43,7 +46,22 @@ def list_tasks(
         stmt = stmt.where(Task.epic_id == epic_id)
     if swimlane_id is not None:
         stmt = stmt.where(Task.swimlane_id == swimlane_id)
-    stmt = stmt.order_by(Task.swimlane_id, Task.position)
+    if priority is not None:
+        stmt = stmt.where(Task.priority == priority)
+    if q:
+        pattern = f"%{q}%"
+        stmt = stmt.where(
+            or_(Task.title.ilike(pattern), Task.description.ilike(pattern))
+        )
+    if sort == "priority":
+        rank = case(
+            {level: i for i, level in enumerate(PRIORITY_LEVELS)},
+            value=Task.priority,
+            else_=-1,
+        )
+        stmt = stmt.order_by(rank.desc(), Task.swimlane_id, Task.position)
+    else:
+        stmt = stmt.order_by(Task.swimlane_id, Task.position)
     return list(db.scalars(stmt))
 
 
