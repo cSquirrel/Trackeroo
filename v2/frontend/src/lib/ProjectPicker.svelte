@@ -2,6 +2,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
+  import Spinner from "./Spinner.svelte";
 
   type RecentProject = { path: string; name: string };
 
@@ -19,6 +20,7 @@
   let recent = $state<RecentProject[]>([]);
   let newName = $state("");
   let busy = $state(false);
+  let busyLabel = $state("Opening project…");
   let error = $state<string | null>(null);
 
   onMount(async () => {
@@ -30,8 +32,14 @@
     }
   });
 
-  async function spawnFor(path: string, create: boolean, name?: string) {
+  async function spawnFor(
+    path: string,
+    create: boolean,
+    label: string,
+    name?: string,
+  ) {
     busy = true;
+    busyLabel = label;
     error = null;
     try {
       const port = await invoke<number>("open_project", { path, create, name });
@@ -59,7 +67,7 @@
     });
     if (typeof parent !== "string") return; // cancelled
     const path = `${parent.replace(/\/$/, "")}/${name}`;
-    await spawnFor(path, true, name);
+    await spawnFor(path, true, "Creating project…", name);
   }
 
   async function openExisting() {
@@ -69,11 +77,11 @@
       title: "Open a Trackeroo project folder",
     });
     if (typeof dir !== "string") return; // cancelled
-    await spawnFor(dir, false);
+    await spawnFor(dir, false, "Opening project…");
   }
 
   async function openRecent(r: RecentProject) {
-    await spawnFor(r.path, false);
+    await spawnFor(r.path, false, "Opening project…");
   }
 </script>
 
@@ -129,7 +137,9 @@
     </section>
 
     {#if busy}
-      <div class="busy">Starting project…</div>
+      <div class="overlay">
+        <Spinner label={busyLabel} />
+      </div>
     {/if}
   </div>
 </div>
@@ -144,6 +154,7 @@
     padding: 2rem;
   }
   .card {
+    position: relative;
     background: #fff;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
@@ -151,6 +162,15 @@
     width: 100%;
     max-width: 520px;
     box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: 12px;
   }
   h1 {
     margin: 0;
@@ -240,11 +260,6 @@
   .empty {
     color: #94a3b8;
     font-size: 0.85rem;
-  }
-  .busy {
-    margin-top: 1.2rem;
-    color: #4f46e5;
-    font-size: 0.9rem;
   }
   .err {
     background: #fee2e2;

@@ -248,7 +248,12 @@ fn get_launch_target() -> LaunchTarget {
 ///   false, an existing `trackeroo.db` is required (Open Project) and its
 ///   absence is an error.
 /// - `name`: display label for the recent list; falls back to the folder name.
-#[tauri::command]
+///
+/// Runs on a separate thread (`command(async)`): spawning the backend and
+/// polling `wait_for_health` blocks for the sidecar's cold-start (~9s in
+/// release). A plain sync command would run on the main thread and freeze the
+/// webview UI, so the picker's "opening…" spinner couldn't animate.
+#[tauri::command(async)]
 fn open_project(
     app: tauri::AppHandle,
     path: String,
