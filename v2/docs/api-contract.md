@@ -7,7 +7,7 @@ way a hand-written doc can.
 
 - **Browse interactively**: with a project open, the backend's port is dynamic
   (see `../CLAUDE.md`'s "Dynamic port" note) — read it from
-  `<project>/.trackeroo/port` and open `http://localhost:<port>/docs`
+  `<project>/.trackeroo/.env` (`TRACKEROO_PORT=...`) and open `http://localhost:<port>/docs`
   (Swagger UI) or `/redoc`.
 - **Regenerate after any route/schema change**:
   ```bash

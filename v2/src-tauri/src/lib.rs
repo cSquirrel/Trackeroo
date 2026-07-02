@@ -46,12 +46,13 @@ fn project_folder_slot() -> &'static Mutex<Option<PathBuf>> {
     PROJECT_FOLDER.get_or_init(|| Mutex::new(None))
 }
 
-/// Where `open_project` publishes the current backend port for this project, so
-/// the MCP server can discover it by project folder instead of needing a
-/// hardcoded port in its config (which goes stale the moment the port changes
-/// on the next launch).
-fn port_file_path(folder: &Path) -> PathBuf {
-    state_dir(folder).join("port")
+/// Where `open_project` publishes the current backend's connection info for
+/// this project, so the MCP server can discover it by project folder instead
+/// of needing a hardcoded port in its config (which goes stale the moment the
+/// port changes on the next launch). A KEY=VALUE .env file rather than a bare
+/// port number so more fields can be added later without a format change.
+fn env_file_path(folder: &Path) -> PathBuf {
+    state_dir(folder).join(".env")
 }
 
 fn kill_backend() {
@@ -75,7 +76,7 @@ fn kill_backend() {
     }
     if let Ok(mut guard) = project_folder_slot().lock() {
         if let Some(folder) = guard.take() {
-            let _ = fs::remove_file(port_file_path(&folder));
+            let _ = fs::remove_file(env_file_path(&folder));
         }
     }
 }
@@ -351,7 +352,8 @@ fn open_project(
     *port_slot().lock().unwrap() = Some(port);
     // Best-effort: an MCP server pointed at this project folder reads this file
     // to find the live port instead of relying on a hardcoded, quickly-stale one.
-    let _ = fs::write(port_file_path(&folder), port.to_string());
+    // KEY=VALUE .env format so more fields can be added later.
+    let _ = fs::write(env_file_path(&folder), format!("TRACKEROO_PORT={port}\n"));
     *project_folder_slot().lock().unwrap() = Some(folder.clone());
 
     let display_name = name
