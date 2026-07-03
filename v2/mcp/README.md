@@ -90,15 +90,26 @@ Restart Claude Desktop after editing the config.
   epic's progress: task counts by swimlane, done %, blocked count
 - `list_tasks` — filter by `epic_id`/`swimlane_id`/`priority`, or set
   `sort_by_priority=True` for highest-priority-first (e.g. "highest priority
-  tickets in review")
+  tickets in review"). Returns a markdown table, not JSON — one header row
+  instead of repeating field names per task. `fields` picks the columns
+  (default: `id, title, description, type, priority, epic_id, swimlane_id,
+  is_blocked` — `description` truncated to 120 chars, call `get_task` for the
+  full text). Valid columns: `id, title, description, type, priority,
+  epic_id, swimlane_id, position, is_blocked, blocked_reason, created_at,
+  updated_at`.
 - `search_tasks` — case-insensitive substring match over title/description
-  (e.g. "do we have a ticket covering authentication?")
+  (e.g. "do we have a ticket covering authentication?"). Same markdown-table
+  output and `fields` param as `list_tasks`.
 - `get_task`, `create_task`, `update_task`
 - `move_task` — reorder/move into a swimlane; surfaces any soft `warnings`
 - `block_task`, `unblock_task`
 - `add_comment`
 - `add_dependency`, `remove_dependency`
 - `add_link`
+
+Tools other than `list_tasks`/`search_tasks` still return JSON (their data is
+nested — comments, links, dependencies, swimlanes — and doesn't flatten into a
+table), but compact and with `null` fields omitted rather than pretty-printed.
 
 ## Developing
 

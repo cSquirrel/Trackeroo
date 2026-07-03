@@ -28,6 +28,22 @@ def _ok_json(result):
     return json.loads(_text(result))
 
 
+def _ok_table(result) -> list[dict]:
+    """Parse a list_tasks/search_tasks markdown-table result back into row dicts,
+    for tests that only care about the data, not the table syntax itself."""
+    assert result.isError is False, f"expected success, got error: {_text(result)}"
+    lines = [line for line in _text(result).splitlines() if line.strip()]
+    header = [c.strip() for c in lines[0].strip("|").split("|")]
+    rows = []
+    for line in lines[2:]:
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        row = dict(zip(header, cells))
+        if row.get("id"):
+            row["id"] = int(row["id"])
+        rows.append(row)
+    return rows
+
+
 def _swimlane_id(mcp_call, name: str) -> int:
     project = _ok_json(mcp_call("get_project"))
     for lane in project["swimlanes"]:
@@ -190,10 +206,10 @@ def test_search_tasks_matches_title_and_description(mcp_call):
         )
     )
 
-    found = _ok_json(mcp_call("search_tasks", {"query": needle}))
+    found = _ok_table(mcp_call("search_tasks", {"query": needle}))
     assert len(found) == 2
 
-    assert _ok_json(mcp_call("search_tasks", {"query": _uniq("no-match")})) == []
+    assert _ok_table(mcp_call("search_tasks", {"query": _uniq("no-match")})) == []
 
 
 def test_list_tasks_priority_filter_and_sort(mcp_call):
@@ -208,14 +224,53 @@ def test_list_tasks_priority_filter_and_sort(mcp_call):
         )
     )
 
-    only_urgent = _ok_json(mcp_call("list_tasks", {"swimlane_id": swimlane_id, "priority": "urgent"}))
+    only_urgent = _ok_table(mcp_call("list_tasks", {"swimlane_id": swimlane_id, "priority": "urgent"}))
     assert {t["id"] for t in only_urgent} == {urgent["id"]}
 
-    sorted_tasks = _ok_json(
+    sorted_tasks = _ok_table(
         mcp_call("list_tasks", {"swimlane_id": swimlane_id, "sort_by_priority": True})
     )
     ids_in_order = [t["id"] for t in sorted_tasks if t["id"] in {low["id"], urgent["id"]}]
     assert ids_in_order == [urgent["id"], low["id"]]
+
+
+def test_list_tasks_default_columns_are_lean(mcp_call):
+    _make_task(mcp_call)
+    header = _text(mcp_call("list_tasks")).splitlines()[0]
+    for col in ("created_at", "updated_at", "position", "blocked_reason"):
+        assert col not in header
+    for col in ("id", "title", "description", "type", "priority", "epic_id", "swimlane_id", "is_blocked"):
+        assert col in header
+
+
+def test_list_tasks_fields_selects_columns(mcp_call):
+    swimlane_id = _swimlane_id(mcp_call, "Backlog")
+    _make_task(mcp_call, "Backlog")
+    raw = _text(mcp_call("list_tasks", {"swimlane_id": swimlane_id, "fields": ["id", "title", "priority"]}))
+    assert raw.splitlines()[0] == "| id | title | priority |"
+
+
+def test_list_tasks_unknown_field_returns_clear_error(mcp_call):
+    result = mcp_call("list_tasks", {"fields": ["bogus_field"]})
+    assert result.isError is True
+    assert "bogus_field" in _text(result)
+
+
+def test_list_tasks_table_escapes_pipe_in_title(mcp_call):
+    swimlane_id = _swimlane_id(mcp_call, "Backlog")
+    title = _uniq("weird") + " | pipe"
+    _ok_json(mcp_call("create_task", {"title": title, "swimlane_id": swimlane_id}))
+    raw = _text(mcp_call("list_tasks", {"swimlane_id": swimlane_id, "fields": ["id", "title"]}))
+    assert title.replace("|", "\\|") in raw
+
+
+def test_get_task_omits_null_fields(mcp_call):
+    task = _make_task(mcp_call)
+    raw = _text(mcp_call("get_task", {"task_id": task["id"]}))
+    for absent_key in ("epic_id", "blocked_reason", "type", "priority"):
+        assert f'"{absent_key}"' not in raw
+    detail = json.loads(raw)
+    assert detail["id"] == task["id"]
 
 
 def test_update_task_reflected_in_get_task(mcp_call):
