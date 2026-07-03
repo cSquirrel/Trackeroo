@@ -98,8 +98,76 @@ def _request(method: str, path: str, **kwargs: Any) -> Any:
     )
 
 
+def _strip_none(obj: Any) -> Any:
+    """Recursively drop dict keys whose value is None — cuts token-costly noise
+    from responses without losing any information the LLM couldn't already
+    infer (an absent field means "not set")."""
+    if isinstance(obj, dict):
+        return {k: _strip_none(v) for k, v in obj.items() if v is not None}
+    if isinstance(obj, list):
+        return [_strip_none(v) for v in obj]
+    return obj
+
+
 def _dump(data: Any) -> str:
-    return json.dumps(data, indent=2, ensure_ascii=False)
+    return json.dumps(_strip_none(data), separators=(",", ":"), ensure_ascii=False)
+
+
+_TASK_FIELDS = (
+    "id",
+    "title",
+    "description",
+    "type",
+    "priority",
+    "epic_id",
+    "swimlane_id",
+    "position",
+    "is_blocked",
+    "blocked_reason",
+    "created_at",
+    "updated_at",
+)
+_DEFAULT_LIST_FIELDS = (
+    "id",
+    "title",
+    "description",
+    "type",
+    "priority",
+    "epic_id",
+    "swimlane_id",
+    "is_blocked",
+)
+_DESCRIPTION_TRUNCATE = 120
+
+
+def _cell(value: Any) -> str:
+    """Render a table cell, escaping characters that would break markdown table syntax."""
+    if value is None:
+        return ""
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def _tasks_table(tasks: list[dict[str, Any]], fields: list[str] | None) -> str:
+    """Render task rows as a markdown table — for uniform list data this states each
+    column name once (in the header) instead of JSON's per-row key repetition, which
+    is most of a list response's token cost."""
+    columns = list(fields) if fields else list(_DEFAULT_LIST_FIELDS)
+    unknown = [c for c in columns if c not in _TASK_FIELDS]
+    if unknown:
+        raise ValueError(f"Unknown field(s) {unknown!r} in `fields`. Valid columns: {list(_TASK_FIELDS)}")
+
+    rows = []
+    for task in tasks:
+        row = dict(task)
+        description = row.get("description")
+        if "description" in columns and description and len(description) > _DESCRIPTION_TRUNCATE:
+            row["description"] = description[:_DESCRIPTION_TRUNCATE] + "…"
+        rows.append(row)
+
+    lines = ["| " + " | ".join(columns) + " |", "|" + "|".join("---" for _ in columns) + "|"]
+    for row in rows:
+        lines.append("| " + " | ".join(_cell(row.get(c)) for c in columns) + " |")
+    return "\n".join(lines)
 
 
 # --- Project ---------------------------------------------------------------
@@ -260,13 +328,23 @@ def list_tasks(
     swimlane_id: int | None = None,
     priority: str | None = None,
     sort_by_priority: bool = False,
+    fields: list[str] | None = None,
 ) -> str:
     """List task summaries, optionally filtered by epic, swimlane, and/or priority.
+    Returned as a markdown table (one header row, one row per task) — cheaper on
+    tokens than JSON for this shape since column names aren't repeated per row.
 
     `priority` filters to an exact level ("low", "medium", "high", "urgent").
     Set `sort_by_priority=True` to order results highest-priority-first — use
     this plus `swimlane_id` to answer things like "highest priority tickets in
     review" (call get_project first to find the "Review" swimlane's id).
+
+    `fields` picks which columns to include (also trims what's fetched, so
+    fewer fields = fewer tokens). Defaults to a lean set: id, title,
+    description (truncated to 120 chars — call get_task for the full text),
+    type, priority, epic_id, swimlane_id, is_blocked. Full set of valid
+    columns: id, title, description, type, priority, epic_id, swimlane_id,
+    position, is_blocked, blocked_reason, created_at, updated_at.
     """
     params: dict[str, Any] = {}
     if epic_id is not None:
@@ -277,16 +355,19 @@ def list_tasks(
         params["priority"] = priority
     if sort_by_priority:
         params["sort"] = "priority"
-    return _dump(_request("GET", "/api/tasks", params=params))
+    tasks = _request("GET", "/api/tasks", params=params)
+    return _tasks_table(tasks, fields)
 
 
 @mcp.tool()
-def search_tasks(query: str) -> str:
+def search_tasks(query: str, fields: list[str] | None = None) -> str:
     """Full-text search over task title and description (case-insensitive substring match).
+    Returned as a markdown table — see list_tasks for the `fields` column list.
 
     Use this to answer things like "do we have a ticket covering authentication?".
     """
-    return _dump(_request("GET", "/api/tasks", params={"q": query}))
+    tasks = _request("GET", "/api/tasks", params={"q": query})
+    return _tasks_table(tasks, fields)
 
 
 @mcp.tool()
