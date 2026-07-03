@@ -5,10 +5,12 @@ binds to a fresh, unpredictable port every time a project is opened (that's
 what lets multiple projects run at once), so a hardcoded URL goes stale the
 moment the app restarts. Point this at the project folder instead via
 TRACKEROO_PROJECT_PATH, and it discovers the live port by reading
-"<project>/.trackeroo/.env" (a KEY=VALUE file written by the app on every
-backend spawn, currently just TRACKEROO_PORT) before each request.
-TRACKEROO_API_URL remains supported as a direct override for cases where a
-known, fixed backend URL is genuinely correct (e.g. manual testing against a
+"<project>/.trackeroo/.env" (a KEY=VALUE file written on every backend spawn,
+currently just TRACKEROO_PORT) before each request — and if no live backend is
+found there (app closed, or it crashed), it spawns one itself on demand; see
+backend_spawn.py. The desktop app does not need to be open for the tools to
+work. TRACKEROO_API_URL remains supported as a direct override for cases where
+a known, fixed backend URL is genuinely correct (e.g. manual testing against a
 backend you started yourself).
 """
 
@@ -22,6 +24,8 @@ from typing import Any
 import httpx
 from mcp.server.fastmcp import FastMCP
 
+import backend_spawn
+
 _EXPLICIT_API_URL = os.environ.get("TRACKEROO_API_URL")
 _PROJECT_PATH = os.environ.get("TRACKEROO_PROJECT_PATH")
 _DEFAULT_API_URL = "http://localhost:8000"
@@ -31,43 +35,17 @@ mcp = FastMCP("trackeroo")
 _client = httpx.Client(timeout=30.0)
 
 
-def _parse_env_file(text: str) -> dict[str, str]:
-    """Minimal KEY=VALUE parser — one entry per non-blank, non-comment line."""
-    env: dict[str, str] = {}
-    for line in text.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        env[key.strip()] = value.strip()
-    return env
-
-
 def _resolve_base_url() -> str:
     """The API base URL for the next request.
 
-    Re-reads the .env file each call (when configured by project path) so a
-    restarted app that picked a different port is picked up automatically,
-    without needing to touch the MCP client config.
+    Re-checks each call (when configured by project path) so a restarted app
+    that picked a different port is picked up automatically, and a missing or
+    dead backend is spawned on demand — the app doesn't need to be open.
     """
     if _EXPLICIT_API_URL:
         return _EXPLICIT_API_URL.rstrip("/")
     if _PROJECT_PATH:
-        env_file = Path(_PROJECT_PATH) / ".trackeroo" / ".env"
-        try:
-            env = _parse_env_file(env_file.read_text())
-        except FileNotFoundError:
-            raise RuntimeError(
-                f"No running Trackeroo backend found for project "
-                f"'{_PROJECT_PATH}' (missing {env_file}). Open this project "
-                f"in the Trackeroo app first."
-            ) from None
-        port = env.get("TRACKEROO_PORT")
-        if not port:
-            raise RuntimeError(
-                f"{env_file} exists but has no TRACKEROO_PORT entry."
-            )
-        return f"http://localhost:{port}"
+        return backend_spawn.ensure_backend_running(Path(_PROJECT_PATH))
     return _DEFAULT_API_URL
 
 
