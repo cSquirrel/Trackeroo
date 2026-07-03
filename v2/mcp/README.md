@@ -116,9 +116,12 @@ Restart Claude Desktop after editing the config.
 - `add_dependency`, `remove_dependency`
 - `add_link`
 
-Tools other than `list_tasks`/`search_tasks` still return JSON (their data is
-nested — comments, links, dependencies, swimlanes — and doesn't flatten into a
-table), but compact and with `null` fields omitted rather than pretty-printed.
+Every tool returns compact markdown, not JSON — chosen for token economy on
+the LLM side. Single objects render as `key: value` lines; nested lists
+(comments, links, dependencies, swimlanes) render as tables under a
+`name (count):` heading; multi-line text (e.g. a task description) comes last
+as its own block. Null fields and empty lists are omitted entirely — absence
+means "not set"/"none".
 
 ## Developing
 

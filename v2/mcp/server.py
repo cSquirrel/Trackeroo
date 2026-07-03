@@ -87,8 +87,65 @@ def _strip_none(obj: Any) -> Any:
     return obj
 
 
-def _dump(data: Any) -> str:
-    return json.dumps(_strip_none(data), separators=(",", ":"), ensure_ascii=False)
+def _scalar(value: Any) -> bool:
+    return isinstance(value, (str, int, float, bool))
+
+
+def _table(rows: list[dict[str, Any]], columns: list[str]) -> str:
+    lines = ["| " + " | ".join(columns) + " |", "|" + "|".join("---" for _ in columns) + "|"]
+    for row in rows:
+        lines.append("| " + " | ".join(_cell(row.get(c)) for c in columns) + " |")
+    return "\n".join(lines)
+
+
+def _columns_of(rows: list[dict[str, Any]]) -> list[str]:
+    return list(dict.fromkeys(key for row in rows for key in row))
+
+
+def _fmt(data: Any) -> str:
+    """Render an API payload as compact markdown instead of JSON — no braces,
+    quotes, or per-row key repetition. Null fields and empty lists are omitted
+    (absence means "not set"/"none"). Scalars become `key: value` lines,
+    lists of objects become tables, multi-line text (descriptions, comment
+    bodies rendered inline in tables) comes last as its own block."""
+    data = _strip_none(data)
+    if isinstance(data, list):
+        if data and all(isinstance(x, dict) for x in data):
+            return _table(data, _columns_of(data))
+        return json.dumps(data, separators=(",", ":"), ensure_ascii=False)
+    if not isinstance(data, dict):
+        return json.dumps(data, separators=(",", ":"), ensure_ascii=False)
+
+    lines: list[str] = []
+    blocks: list[str] = []
+    for key, value in data.items():
+        if isinstance(value, str) and "\n" in value:
+            blocks.append(f"{key}:\n{value}")
+        elif _scalar(value):
+            lines.append(f"{key}: {value}")
+        elif isinstance(value, list):
+            if not value:
+                continue  # absent = none, same rule as null fields
+            if all(isinstance(x, dict) for x in value):
+                blocks.append(f"{key} ({len(value)}):\n{_table(value, _columns_of(value))}")
+            else:
+                lines.append(f"{key}: " + "; ".join(str(x) for x in value))
+        elif isinstance(value, dict) and all(_scalar(v) for v in value.values()):
+            lines.append(f"{key}: " + ", ".join(f"{k}={v}" for k, v in value.items()))
+        else:
+            lines.append(
+                f"{key}: " + json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+            )
+    return "\n\n".join(part for part in ["\n".join(lines), *blocks] if part)
+
+
+def _ack(data: Any) -> str:
+    """Mutation acknowledgement: like _fmt, minus the description echo — the
+    caller just sent it (or already has it via get_task), so repeating a
+    potentially huge markdown body in the ack is pure token waste."""
+    if isinstance(data, dict):
+        data = {k: v for k, v in data.items() if k != "description"}
+    return _fmt(data)
 
 
 _TASK_FIELDS = (
@@ -142,10 +199,7 @@ def _tasks_table(tasks: list[dict[str, Any]], fields: list[str] | None) -> str:
             row["description"] = description[:_DESCRIPTION_TRUNCATE] + "…"
         rows.append(row)
 
-    lines = ["| " + " | ".join(columns) + " |", "|" + "|".join("---" for _ in columns) + "|"]
-    for row in rows:
-        lines.append("| " + " | ".join(_cell(row.get(c)) for c in columns) + " |")
-    return "\n".join(lines)
+    return _table(rows, columns)
 
 
 # --- Project ---------------------------------------------------------------
@@ -158,7 +212,7 @@ def get_project() -> str:
     Call this first to discover valid swimlane ids/names before creating or
     moving tasks.
     """
-    return _dump(_request("GET", "/api/project"))
+    return _fmt(_request("GET", "/api/project"))
 
 
 # --- Swimlanes ---------------------------------------------------------------
@@ -171,7 +225,7 @@ def create_swimlane(name: str, position: int = 0, is_done_column: bool = False) 
     warning purposes (see move_task).
     """
     payload = {"name": name, "position": position, "is_done_column": is_done_column}
-    return _dump(_request("POST", "/api/swimlanes", json=payload))
+    return _fmt(_request("POST", "/api/swimlanes", json=payload))
 
 
 @mcp.tool()
@@ -189,7 +243,7 @@ def update_swimlane(
         payload["position"] = position
     if is_done_column is not None:
         payload["is_done_column"] = is_done_column
-    return _dump(_request("PATCH", f"/api/swimlanes/{swimlane_id}", json=payload))
+    return _fmt(_request("PATCH", f"/api/swimlanes/{swimlane_id}", json=payload))
 
 
 @mcp.tool()
@@ -207,7 +261,7 @@ def reorder_swimlanes(ordered_ids: list[int]) -> str:
     swimlane id exactly once, in the desired left-to-right order — call
     get_project first to see current ids. Returns the reordered list.
     """
-    return _dump(_request("POST", "/api/swimlanes/reorder", json={"ordered_ids": ordered_ids}))
+    return _fmt(_request("POST", "/api/swimlanes/reorder", json={"ordered_ids": ordered_ids}))
 
 
 # --- Epics -----------------------------------------------------------------
@@ -216,7 +270,7 @@ def reorder_swimlanes(ordered_ids: list[int]) -> str:
 @mcp.tool()
 def list_epics() -> str:
     """List all epics."""
-    return _dump(_request("GET", "/api/epics"))
+    return _fmt(_request("GET", "/api/epics"))
 
 
 @mcp.tool()
@@ -233,7 +287,7 @@ def create_epic(
     payload: dict[str, Any] = {"title": title, "description": description, "color": color}
     if priority is not None:
         payload["priority"] = priority
-    return _dump(_request("POST", "/api/epics", json=payload))
+    return _ack(_request("POST", "/api/epics", json=payload))
 
 
 @mcp.tool()
@@ -257,7 +311,7 @@ def update_epic(
         payload["color"] = color
     if priority is not None:
         payload["priority"] = priority
-    return _dump(_request("PATCH", f"/api/epics/{epic_id}", json=payload))
+    return _ack(_request("PATCH", f"/api/epics/{epic_id}", json=payload))
 
 
 @mcp.tool()
@@ -285,7 +339,7 @@ def epic_status(epic_id: int) -> str:
             blocked += 1
 
     total = len(tasks)
-    return _dump(
+    return _fmt(
         {
             "epic": {"id": epic["id"], "title": epic["title"], "priority": epic.get("priority")},
             "total_tasks": total,
@@ -351,7 +405,7 @@ def search_tasks(query: str, fields: list[str] | None = None) -> str:
 @mcp.tool()
 def get_task(task_id: int) -> str:
     """Get full task detail: fields plus comments, links, and dependencies."""
-    return _dump(_request("GET", f"/api/tasks/{task_id}"))
+    return _fmt(_request("GET", f"/api/tasks/{task_id}"))
 
 
 @mcp.tool()
@@ -379,7 +433,7 @@ def create_task(
         payload["epic_id"] = epic_id
     if swimlane_id is not None:
         payload["swimlane_id"] = swimlane_id
-    return _dump(_request("POST", "/api/tasks", json=payload))
+    return _ack(_request("POST", "/api/tasks", json=payload))
 
 
 @mcp.tool()
@@ -403,7 +457,7 @@ def update_task(
         payload["type"] = type
     if priority is not None:
         payload["priority"] = priority
-    return _dump(_request("PATCH", f"/api/tasks/{task_id}", json=payload))
+    return _ack(_request("PATCH", f"/api/tasks/{task_id}", json=payload))
 
 
 @mcp.tool()
@@ -416,7 +470,7 @@ def move_task(task_id: int, swimlane_id: int, position: int) -> str:
     payload = {"swimlane_id": swimlane_id, "position": position}
     result = _request("POST", f"/api/tasks/{task_id}/move", json=payload)
     warnings = result.get("warnings") or [] if isinstance(result, dict) else []
-    out = _dump(result)
+    out = _ack(result)
     if warnings:
         joined = "\n".join(f"- {w}" for w in warnings)
         out = f"Move succeeded with warnings:\n{joined}\n\n{out}"
@@ -426,13 +480,13 @@ def move_task(task_id: int, swimlane_id: int, position: int) -> str:
 @mcp.tool()
 def block_task(task_id: int, reason: str) -> str:
     """Mark a task as blocked with a reason."""
-    return _dump(_request("POST", f"/api/tasks/{task_id}/block", json={"reason": reason}))
+    return _ack(_request("POST", f"/api/tasks/{task_id}/block", json={"reason": reason}))
 
 
 @mcp.tool()
 def unblock_task(task_id: int) -> str:
     """Clear a task's blocked state."""
-    return _dump(_request("POST", f"/api/tasks/{task_id}/unblock"))
+    return _ack(_request("POST", f"/api/tasks/{task_id}/unblock"))
 
 
 # --- Comments --------------------------------------------------------------
@@ -442,7 +496,7 @@ def unblock_task(task_id: int) -> str:
 def add_comment(task_id: int, author: str, body: str, kind: str = "comment") -> str:
     """Add a comment to a task. `kind` is "comment" or "annotation"."""
     payload = {"author": author, "body": body, "kind": kind}
-    return _dump(_request("POST", f"/api/tasks/{task_id}/comments", json=payload))
+    return _fmt(_request("POST", f"/api/tasks/{task_id}/comments", json=payload))
 
 
 # --- Dependencies ----------------------------------------------------------
@@ -452,7 +506,7 @@ def add_comment(task_id: int, author: str, body: str, kind: str = "comment") -> 
 def add_dependency(task_id: int, depends_on_task_id: int) -> str:
     """Make `task_id` depend on `depends_on_task_id`."""
     payload = {"depends_on_task_id": depends_on_task_id}
-    return _dump(_request("POST", f"/api/tasks/{task_id}/dependencies", json=payload))
+    return _fmt(_request("POST", f"/api/tasks/{task_id}/dependencies", json=payload))
 
 
 @mcp.tool()
@@ -469,7 +523,7 @@ def remove_dependency(task_id: int, dependency_id: int) -> str:
 def add_link(task_id: int, url: str, label: str, link_type: str) -> str:
     """Attach a link to a task. `link_type` is "pr", "slack", or "other"."""
     payload = {"url": url, "label": label, "link_type": link_type}
-    return _dump(_request("POST", f"/api/tasks/{task_id}/links", json=payload))
+    return _fmt(_request("POST", f"/api/tasks/{task_id}/links", json=payload))
 
 
 if __name__ == "__main__":
