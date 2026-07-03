@@ -5,8 +5,9 @@ task board's REST API as tools, so AI agents can read and manage tasks, epics,
 comments, dependencies, and links directly.
 
 It is a thin HTTP client of the REST API described in
-[`../docs/api-contract.md`](../docs/api-contract.md); the Trackeroo backend must
-be running and reachable for the tools to work.
+[`../docs/api-contract.md`](../docs/api-contract.md). The Trackeroo app does
+**not** need to be open: if no live backend is found for the project, the MCP
+server spawns one itself on demand (see `backend_spawn.py`).
 
 It's bundled into the app as a real executable (`Contents/MacOS/trackeroo-mcp`)
 — installing `Trackeroo.app` is enough, no Python/pip/venv needed to use MCP.
@@ -22,11 +23,19 @@ folder** instead, and it discovers the live port automatically:
 export TRACKEROO_PROJECT_PATH="/path/to/your/project"
 ```
 
-It reads `<project>/.trackeroo/.env` (a KEY=VALUE file written by the app every time it spawns
-a backend) fresh before each request, so it keeps working across app
-restarts with no config changes — as long as that project is currently open
-in Trackeroo. If it isn't, you'll get a clear error telling you to open it
-first, instead of a silent connection failure.
+It reads `<project>/.trackeroo/.env` (a KEY=VALUE file written every time a
+backend spawns) fresh before each request, so it keeps working across app
+restarts with no config changes. If no live backend is found there — the app
+is closed, or its backend died — the MCP server health-checks, then spawns
+the backend itself (the same entry point the app uses) and writes `.env` the
+same way, so the app and other MCP clients can discover it too.
+
+MCP-spawned backends shut themselves down after 30 minutes without any HTTP
+requests (set `TRACKEROO_IDLE_TIMEOUT_MINUTES` to change this). App-spawned
+backends are untouched by all of this: the app still starts and stops its own
+backend exactly as before. If you open the app on a project while an
+MCP-spawned backend is still idling out, the two overlap harmlessly for a
+while (WAL + busy-timeout keep writes safe); the idle one exits on its own.
 
 For a known, fixed backend URL instead (e.g. manual testing against a
 backend you started yourself), `TRACKEROO_API_URL` still works and takes
