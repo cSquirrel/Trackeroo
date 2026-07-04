@@ -6,10 +6,8 @@ live backend, reuse it; otherwise spawn the backend ourselves (the same
 write `.env` exactly the way the app does — so the app, other MCP processes,
 and this one all discover each other through the same file.
 
-The `.env` file stores `TRACKEROO_API_URL=<full-origin>` (e.g.
-``http://localhost:8787``).  The legacy ``TRACKEROO_PORT=<port>`` key is still
-read for backward compatibility with older Tauri shells, but new entries
-always write the full URL.  Carrying full URLs through the whole chain — env
+The `.env` file stores ``TRACKEROO_API_URL=<full-origin>`` (e.g.
+``http://localhost:8787``).  Carrying full URLs through the whole chain — env
 file, health-check, return value — means a future remote API only needs the
 URL to change; nothing else in the MCP needs to know whether the backend is
 local or remote.
@@ -70,12 +68,7 @@ def _parse_env_file(text: str) -> dict[str, str]:
 
 
 def _read_url(folder: Path) -> str | None:
-    """Read the backend URL from the project's ``.env`` file.
-
-    Prefers ``TRACKEROO_API_URL`` (full origin); falls back to building one
-    from the legacy ``TRACKEROO_PORT`` key for backward compatibility with
-    older Tauri shells that haven't been updated yet.
-    """
+    """Read the backend URL from the project's ``.env`` file."""
     try:
         env = _parse_env_file(_env_file(folder).read_text())
     except FileNotFoundError:
@@ -83,9 +76,6 @@ def _read_url(folder: Path) -> str | None:
     url = env.get("TRACKEROO_API_URL")
     if url:
         return url.rstrip("/")
-    port = env.get("TRACKEROO_PORT")
-    if port and port.isdigit():
-        return f"http://localhost:{port}"
     return None
 
 

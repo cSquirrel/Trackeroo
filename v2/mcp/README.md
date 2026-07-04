@@ -29,8 +29,7 @@ each request, so it keeps working across app restarts with no config changes.
 If no live backend is found there — the app is closed, or its backend died —
 the MCP server health-checks, then spawns the backend itself (the same entry
 point the app uses) and writes `.env` the same way, so the app and other MCP
-clients can discover it too. The legacy `TRACKEROO_PORT=<port>` format is
-still read for backward compatibility.
+clients can discover it too.
 
 MCP-spawned backends shut themselves down after 30 minutes without any HTTP
 requests (set `TRACKEROO_IDLE_TIMEOUT_MINUTES` to change this). App-spawned

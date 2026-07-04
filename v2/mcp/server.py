@@ -6,8 +6,7 @@ what lets multiple projects run at once), so a hardcoded URL goes stale the
 moment the app restarts. Point this at the project folder instead via
 TRACKEROO_PROJECT_PATH, and it discovers the live backend URL by reading
 "<project>/.trackeroo/.env" (a KEY=VALUE file written on every backend spawn —
-``TRACKEROO_API_URL=<full-origin>``, with legacy ``TRACKEROO_PORT`` still
-supported for backward compatibility) before each request — and if no live
+``TRACKEROO_API_URL=<full-origin>``) before each request — and if no live
 backend is found there (app closed, or it crashed), it spawns one itself on
 demand; see backend_spawn.py. The desktop app does not need to be open for the
 tools to work. The TRACKEROO_API_URL *environment variable* remains supported

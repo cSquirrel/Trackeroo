@@ -91,15 +91,6 @@ def test_respawns_when_env_points_at_dead_url(project: Path):
     assert httpx.get(f"{url}/api/health", timeout=5.0).status_code == 200
 
 
-def test_reads_legacy_port_env_format(project: Path):
-    """Backward compat: an .env written by an older Tauri shell with just
-    TRACKEROO_PORT still works."""
-    url = backend_spawn.ensure_backend_running(project)
-    port = int(url.rsplit(":", 1)[1])
-    (project / ".trackeroo" / ".env").write_text(f"TRACKEROO_PORT={port}\n")
-    reused = backend_spawn.ensure_backend_running(project)
-    assert reused == url
-
 
 def test_concurrent_callers_spawn_exactly_once(project: Path):
     results: list[str] = []
