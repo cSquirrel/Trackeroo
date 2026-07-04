@@ -43,7 +43,12 @@ def _resolve_base_url() -> str:
     dead backend is spawned on demand — the app doesn't need to be open.
     """
     if _EXPLICIT_API_URL:
-        return _EXPLICIT_API_URL.rstrip("/")
+        url = _EXPLICIT_API_URL.rstrip("/")
+        if not url.startswith(("http://", "https://")):
+            raise RuntimeError(
+                f"TRACKEROO_API_URL is not a valid HTTP URL: {url!r}"
+            )
+        return url
     if _PROJECT_PATH:
         return backend_spawn.ensure_backend_running(Path(_PROJECT_PATH))
     return _DEFAULT_API_URL
@@ -54,6 +59,10 @@ def _request(method: str, path: str, **kwargs: Any) -> Any:
     base_url = _resolve_base_url()
     try:
         resp = _client.request(method, f"{base_url}{path}", **kwargs)
+    except httpx.InvalidURL as exc:
+        raise RuntimeError(
+            f"Malformed Trackeroo API URL '{base_url}': {exc}"
+        ) from exc
     except httpx.RequestError as exc:
         raise RuntimeError(
             f"Could not reach Trackeroo API at {base_url} ({method} {path}): {exc}"

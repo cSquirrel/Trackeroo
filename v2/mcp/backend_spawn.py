@@ -68,15 +68,25 @@ def _parse_env_file(text: str) -> dict[str, str]:
 
 
 def _read_url(folder: Path) -> str | None:
-    """Read the backend URL from the project's ``.env`` file."""
+    """Read the backend URL from the project's ``.env`` file.
+
+    Returns ``None`` when the file is missing or contains no
+    ``TRACKEROO_API_URL`` entry.  Raises if the value is present but
+    malformed so callers don't silently ignore a bad configuration.
+    """
     try:
         env = _parse_env_file(_env_file(folder).read_text())
     except FileNotFoundError:
         return None
     url = env.get("TRACKEROO_API_URL")
-    if url:
-        return url.rstrip("/")
-    return None
+    if not url:
+        return None
+    url = url.rstrip("/")
+    if not url.startswith(("http://", "https://")):
+        raise RuntimeError(
+            f"TRACKEROO_API_URL in {_env_file(folder)} is not a valid HTTP URL: {url!r}"
+        )
+    return url
 
 
 def _health_ok(base_url: str) -> bool:
