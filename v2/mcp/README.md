@@ -143,18 +143,24 @@ release bundle" section.
 ## Tests
 
 `tests/` holds an integration suite that exercises every tool end-to-end against
-a real backend. A session-scoped pytest fixture boots the actual Docker Compose
-stack on an isolated port (`8100`) and its own named volume — so it never
-collides with a local dev stack or its data — waits for `/api/health`, runs the
-tools through the MCP SDK's in-memory client session (the same path a real MCP
-client uses), and tears the stack down (`docker compose down -v`) afterwards,
-even on failure.
+a real backend. A session-scoped pytest fixture spawns the actual backend (the
+same `run_sidecar.py` entry point the app uses) from `../backend/.venv` on an
+isolated free port, pointed at a throwaway SQLite database in a temp dir — so it
+never collides with a local dev stack or its data — waits for `/api/health`,
+runs the tools through the MCP SDK's in-memory client session (the same path a
+real MCP client uses), and kills the backend afterwards, even on failure.
 
-Requires Docker to be running. From the `mcp/` directory:
+No Docker required — it just needs the backend's virtualenv. From the `mcp/`
+directory:
 
 ```bash
+# one-time: create the backend venv the tests spawn
+python3 -m venv ../backend/.venv
+../backend/.venv/bin/pip install -r ../backend/requirements.txt
+
 pip install -r requirements.txt -r tests/requirements.txt
 pytest -q
 ```
 
-The first run builds the image (a few minutes); later runs reuse the cache.
+`tests_spawn/` separately covers `backend_spawn.py`'s discover-or-spawn logic
+(it manages its own per-test backends); run it with `pytest tests_spawn/ -q`.

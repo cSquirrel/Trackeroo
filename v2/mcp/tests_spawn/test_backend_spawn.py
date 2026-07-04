@@ -1,9 +1,11 @@
 """Tests for backend_spawn: MCP's discover-or-spawn of the project backend.
 
-Deliberately NOT in tests/ — that directory's conftest boots the Docker stack
-for every test in it (autouse session fixture), and these tests need no
-Docker: they spawn the real backend via backend/.venv against a throwaway
-temp project folder, and kill whatever they started afterwards.
+Deliberately NOT in tests/ — that directory's conftest brings up a single,
+session-scoped backend (autouse) for the whole suite, whereas these tests need
+to spawn and kill their *own* backends per test (to exercise discovery,
+respawn, idle timeout, and concurrent spawners) against throwaway temp project
+folders. Both suites spawn the real backend via backend/.venv; neither needs
+Docker.
 
 Run from mcp/:  .venv/bin/pytest tests_spawn/ -q
 """

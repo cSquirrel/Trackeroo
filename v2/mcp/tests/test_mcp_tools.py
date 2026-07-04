@@ -1,4 +1,4 @@
-"""End-to-end MCP tool tests against the live Trackeroo Docker stack.
+"""End-to-end MCP tool tests against a live Trackeroo backend.
 
 Every call goes through the MCP in-memory client session (see conftest), so the
 assertions reflect what a real MCP client receives: tool results are compact
