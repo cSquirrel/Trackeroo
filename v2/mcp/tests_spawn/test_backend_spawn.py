@@ -92,6 +92,38 @@ def test_respawns_when_env_points_at_dead_url(project: Path):
 
 
 
+@pytest.mark.parametrize("bad_url", [
+    "ftp://localhost:8787",
+    "not-a-url",
+    "://missing-scheme",
+    "localhost:8787",
+])
+def test_read_url_rejects_malformed(tmp_path: Path, bad_url: str):
+    state = tmp_path / ".trackeroo"
+    state.mkdir()
+    (state / ".env").write_text(f"TRACKEROO_API_URL={bad_url}\n")
+    with pytest.raises(RuntimeError, match="not a valid HTTP URL"):
+        backend_spawn._read_url(tmp_path)
+
+
+def test_read_url_returns_none_when_missing(tmp_path: Path):
+    assert backend_spawn._read_url(tmp_path) is None
+
+
+def test_read_url_returns_none_when_env_has_no_url(tmp_path: Path):
+    state = tmp_path / ".trackeroo"
+    state.mkdir()
+    (state / ".env").write_text("SOME_OTHER_KEY=value\n")
+    assert backend_spawn._read_url(tmp_path) is None
+
+
+def test_read_url_strips_trailing_slash(tmp_path: Path):
+    state = tmp_path / ".trackeroo"
+    state.mkdir()
+    (state / ".env").write_text("TRACKEROO_API_URL=http://localhost:9999/\n")
+    assert backend_spawn._read_url(tmp_path) == "http://localhost:9999"
+
+
 def test_concurrent_callers_spawn_exactly_once(project: Path):
     results: list[str] = []
     errors: list[Exception] = []
