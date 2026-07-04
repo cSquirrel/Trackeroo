@@ -28,8 +28,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import backend_spawn
 
 
+def _url_of(folder: Path) -> str | None:
+    return backend_spawn._read_url(folder)
+
+
 def _port_of(folder: Path) -> int | None:
-    return backend_spawn._read_port(folder)
+    url = _url_of(folder)
+    if url is None:
+        return None
+    return int(url.rsplit(":", 1)[1])
 
 
 def _kill_port(port: int) -> None:
@@ -65,7 +72,8 @@ def test_spawns_when_no_backend(project: Path):
     url = backend_spawn.ensure_backend_running(project)
     resp = httpx.get(f"{url}/api/project", timeout=5.0)
     assert resp.status_code == 200
-    assert (project / ".trackeroo" / ".env").read_text().startswith("TRACKEROO_PORT=")
+    env_content = (project / ".trackeroo" / ".env").read_text()
+    assert env_content.startswith("TRACKEROO_API_URL=http://localhost:")
 
 
 def test_reuses_healthy_backend(project: Path):
@@ -74,12 +82,23 @@ def test_reuses_healthy_backend(project: Path):
     assert first == second  # same port — no second spawn
 
 
-def test_respawns_when_env_points_at_dead_port(project: Path):
+def test_respawns_when_env_points_at_dead_url(project: Path):
     dead_port = backend_spawn._pick_free_port()
-    (project / ".trackeroo" / ".env").write_text(f"TRACKEROO_PORT={dead_port}\n")
+    dead_url = f"http://localhost:{dead_port}"
+    (project / ".trackeroo" / ".env").write_text(f"TRACKEROO_API_URL={dead_url}\n")
     url = backend_spawn.ensure_backend_running(project)
-    assert url != f"http://localhost:{dead_port}"
+    assert url != dead_url
     assert httpx.get(f"{url}/api/health", timeout=5.0).status_code == 200
+
+
+def test_reads_legacy_port_env_format(project: Path):
+    """Backward compat: an .env written by an older Tauri shell with just
+    TRACKEROO_PORT still works."""
+    url = backend_spawn.ensure_backend_running(project)
+    port = int(url.rsplit(":", 1)[1])
+    (project / ".trackeroo" / ".env").write_text(f"TRACKEROO_PORT={port}\n")
+    reused = backend_spawn.ensure_backend_running(project)
+    assert reused == url
 
 
 def test_concurrent_callers_spawn_exactly_once(project: Path):
@@ -128,4 +147,4 @@ def test_idle_timeout_shuts_backend_down(project: Path, monkeypatch):
     # resets the idle timer. Sleep silently past timeout+watchdog-interval,
     # then check exactly once.
     time.sleep(10)
-    assert not backend_spawn._health_ok(int(url.rsplit(":", 1)[1]))
+    assert not backend_spawn._health_ok(url)

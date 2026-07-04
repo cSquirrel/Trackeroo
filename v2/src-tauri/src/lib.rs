@@ -46,11 +46,11 @@ fn project_folder_slot() -> &'static Mutex<Option<PathBuf>> {
     PROJECT_FOLDER.get_or_init(|| Mutex::new(None))
 }
 
-/// Where `open_project` publishes the current backend's connection info for
+/// Where `open_project` publishes the current backend's full API URL for
 /// this project, so the MCP server can discover it by project folder instead
 /// of needing a hardcoded port in its config (which goes stale the moment the
-/// port changes on the next launch). A KEY=VALUE .env file rather than a bare
-/// port number so more fields can be added later without a format change.
+/// port changes on the next launch). A KEY=VALUE .env file with
+/// `TRACKEROO_API_URL=<origin>` so remote backends only need the URL to change.
 fn env_file_path(folder: &Path) -> PathBuf {
     state_dir(folder).join(".env")
 }
@@ -351,9 +351,11 @@ fn open_project(
     }
     *port_slot().lock().unwrap() = Some(port);
     // Best-effort: an MCP server pointed at this project folder reads this file
-    // to find the live port instead of relying on a hardcoded, quickly-stale one.
-    // KEY=VALUE .env format so more fields can be added later.
-    let _ = fs::write(env_file_path(&folder), format!("TRACKEROO_PORT={port}\n"));
+    // to discover the backend URL instead of relying on a hardcoded one.
+    let _ = fs::write(
+        env_file_path(&folder),
+        format!("TRACKEROO_API_URL=http://localhost:{port}\n"),
+    );
     *project_folder_slot().lock().unwrap() = Some(folder.clone());
 
     let display_name = name
