@@ -37,9 +37,11 @@ and `v2/CLAUDE.md` — this section only records the non-obvious cloud gotchas.
   `binaries/trackeroo-mcp`, so the build script fails unless
   `src-tauri/binaries/trackeroo-backend-x86_64-unknown-linux-gnu` and
   `...-mcp-...` exist. These are the PyInstaller sidecars (macOS-only, gitignored).
-  In **dev** they are never executed (the shell spawns the backend from
-  `backend/.venv`), so creating empty executable placeholder files at those two
-  paths is enough to let `tauri dev` build. Create them if missing.
+ In **dev** they are never executed (the shell spawns the backend from
+ `backend/.venv`), so creating empty executable placeholder files at those two
+ paths is enough to let `tauri dev` build. The update script creates them (as
+ `binaries/trackeroo-{backend,mcp}-x86_64-unknown-linux-gnu`); recreate them if
+ missing.
 - **Skip the native picker** by launching with a project folder path directly:
   `DISPLAY=:1 src-tauri/target/debug/trackeroo /some/folder` opens straight to the
   board (a fresh folder becomes a new project). Handy for driving the board in
@@ -50,9 +52,10 @@ and `v2/CLAUDE.md` — this section only records the non-obvious cloud gotchas.
   fixture opens `sqlite:///./data/test.db` before the app auto-creates that dir, so
   run `mkdir -p v2/backend/data` once.
 - **MCP tests**: both suites spawn the real backend from `backend/.venv` (no
-  Docker). `pytest` from `v2/mcp` runs everything; `tests/` is the tool-level
-  integration suite (session-scoped backend) and `tests_spawn/` covers
-  `backend_spawn.py` (per-test backends; needs `lsof`). Create `backend/.venv`
-  first (the update script does this).
+ Docker), but the pytest process itself needs the `mcp` package, which is not on
+ the system Python — run them from the MCP venv: `.venv/bin/python -m pytest`
+ from `v2/mcp`. `tests/` is the tool-level integration suite (session-scoped
+ backend) and `tests_spawn/` covers `backend_spawn.py` (per-test backends; needs
+ `lsof`). The update script creates both `backend/.venv` and `mcp/.venv`.
 - **libEGL / DRI3 warnings** when launching the app are harmless (software GL
   fallback); the WebKit window still renders.
