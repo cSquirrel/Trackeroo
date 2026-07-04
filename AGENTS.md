@@ -42,6 +42,17 @@ and `v2/CLAUDE.md` — this section only records the non-obvious cloud gotchas.
  paths is enough to let `tauri dev` build. The update script creates them (as
  `binaries/trackeroo-{backend,mcp}-x86_64-unknown-linux-gnu`); recreate them if
  missing.
+- **`npm run tauri build` (release) works on the cloud VM.** With the placeholders
+ present it builds end-to-end and emits deb + rpm + AppImage bundles under
+ `src-tauri/target/release/bundle/`. First run downloads the AppImage tooling
+ (linuxdeploy et al.) from GitHub — needs network; the rpm bundler is built into
+ Tauri (no `rpmbuild` needed). The release compile cache is warmed in the VM
+ snapshot, so only the leaf `trackeroo` crate recompiles (~30s), not the ~500
+ dependency crates. **Caveat:** a bundle built from the *empty placeholders* has
+ no working backend sidecar inside it — it packages/launches but can't open a
+ project. PyInstaller is preinstalled in both venvs (`.venv/bin/pyinstaller`) to
+ build real sidecars per `v2/README.md`, but the target triple there is
+ macOS-only; on Linux name the outputs `...-x86_64-unknown-linux-gnu` to match.
 - **Skip the native picker** by launching with a project folder path directly:
   `DISPLAY=:1 src-tauri/target/debug/trackeroo /some/folder` opens straight to the
   board (a fresh folder becomes a new project). Handy for driving the board in
