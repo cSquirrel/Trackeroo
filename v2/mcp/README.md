@@ -24,11 +24,14 @@ export TRACKEROO_PROJECT_PATH="/path/to/your/project"
 ```
 
 It reads `<project>/.trackeroo/.env` (a KEY=VALUE file written every time a
-backend spawns) fresh before each request, so it keeps working across app
-restarts with no config changes. If no live backend is found there — the app
-is closed, or its backend died — the MCP server health-checks, then spawns
-the backend itself (the same entry point the app uses) and writes `.env` the
-same way, so the app and other MCP clients can discover it too.
+backend spawns as `TRACKEROO_API_URL=<full-url>`) fresh before each request,
+so it keeps working across app restarts with no config changes. Storing a full
+URL instead of just a port number means the value can point at any host —
+local or remote — without changing the discovery protocol. If no live backend
+is found there — the app is closed, or its backend died — the MCP server
+health-checks, then spawns the backend itself (the same entry point the app
+uses) and writes `.env` the same way, so the app and other MCP clients can
+discover it too.
 
 MCP-spawned backends shut themselves down after 30 minutes without any HTTP
 requests (set `TRACKEROO_IDLE_TIMEOUT_MINUTES` to change this). App-spawned

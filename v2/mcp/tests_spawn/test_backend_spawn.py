@@ -28,8 +28,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import backend_spawn
 
 
+def _url_of(folder: Path) -> str | None:
+    return backend_spawn._read_api_url(folder)
+
+
 def _port_of(folder: Path) -> int | None:
-    return backend_spawn._read_port(folder)
+    """Extract the port from the stored API URL for use with lsof/kill helpers."""
+    url = _url_of(folder)
+    if url is None:
+        return None
+    try:
+        return int(url.rsplit(":", 1)[1].split("/")[0])
+    except (ValueError, IndexError):
+        return None
 
 
 def _kill_port(port: int) -> None:
@@ -65,7 +76,7 @@ def test_spawns_when_no_backend(project: Path):
     url = backend_spawn.ensure_backend_running(project)
     resp = httpx.get(f"{url}/api/project", timeout=5.0)
     assert resp.status_code == 200
-    assert (project / ".trackeroo" / ".env").read_text().startswith("TRACKEROO_PORT=")
+    assert (project / ".trackeroo" / ".env").read_text().startswith("TRACKEROO_API_URL=")
 
 
 def test_reuses_healthy_backend(project: Path):
@@ -76,9 +87,21 @@ def test_reuses_healthy_backend(project: Path):
 
 def test_respawns_when_env_points_at_dead_port(project: Path):
     dead_port = backend_spawn._pick_free_port()
+    # Legacy TRACKEROO_PORT format — must still be recognised as a dead endpoint.
     (project / ".trackeroo" / ".env").write_text(f"TRACKEROO_PORT={dead_port}\n")
     url = backend_spawn.ensure_backend_running(project)
-    assert url != f"http://localhost:{dead_port}"
+    assert url != f"http://127.0.0.1:{dead_port}"
+    assert httpx.get(f"{url}/api/health", timeout=5.0).status_code == 200
+
+
+def test_respawns_when_env_has_dead_full_url(project: Path):
+    dead_port = backend_spawn._pick_free_port()
+    # New TRACKEROO_API_URL format — a stale full URL must trigger a respawn.
+    (project / ".trackeroo" / ".env").write_text(
+        f"TRACKEROO_API_URL=http://127.0.0.1:{dead_port}\n"
+    )
+    url = backend_spawn.ensure_backend_running(project)
+    assert url != f"http://127.0.0.1:{dead_port}"
     assert httpx.get(f"{url}/api/health", timeout=5.0).status_code == 200
 
 
@@ -128,4 +151,4 @@ def test_idle_timeout_shuts_backend_down(project: Path, monkeypatch):
     # resets the idle timer. Sleep silently past timeout+watchdog-interval,
     # then check exactly once.
     time.sleep(10)
-    assert not backend_spawn._health_ok(int(url.rsplit(":", 1)[1]))
+    assert not backend_spawn._health_ok(url)
