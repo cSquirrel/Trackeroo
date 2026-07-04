@@ -8,15 +8,16 @@ Packaged as a native macOS desktop app (Tauri) — the target use case is a sing
 
 ## Worktrees
 
-**Any work in this repo happens in a git worktree, never directly in `main`'s working tree.** `worktrees/` lives inside this checkout and is git-ignored:
+**Any work in this repo happens in a git worktree, never directly in the checkout's working tree.** `worktrees/` lives inside this checkout and is git-ignored:
 
 ```bash
-git worktree add worktrees/<short-task-name> -b <branch-name>
+git worktree add worktrees/<short-task-name> -b <branch-name> develop
 cd worktrees/<short-task-name>
 ```
 
 See `CLAUDE.md` for the full convention.
 
-## Versioning
+## Branch model & releases
 
-This repo uses git. The `main` branch (this checkout) is the mainline; all feature work happens in `worktrees/` as git worktrees, never directly against `main`.
+- **`develop`** is the active development branch — feature branches fork from it and merge back into it.
+- **`main`** holds stable releases. Cut a release by merging `develop` → `main` and pushing a semver tag `vX.Y.Z` on `main`; that tag runs `.github/workflows/release.yml`, which builds and drafts a signed GitHub Release. Publishing it is what ships an auto-update to installed apps. See [`v2/README.md`](v2/README.md) → "Releases & auto-updates" for the full pipeline and the one-time signing-key setup.
