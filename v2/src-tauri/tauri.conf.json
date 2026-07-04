@@ -37,7 +37,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEE3QzYzRTcyMDQyOUU1RUQKUldUdDVTa0VjajdHcHlYRG44dEtaWGEvSFdaRTJFSDFMN0d1UVJLWlRGZGR6YUJRZVhTaGE2L3IK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxRDE0RkRCRUREQjcwMjMKUldRamNOdnQyMC9SUVFtVlFvV0cyZThTazlWWkFMc1BFZGo0dmYwZ0s5RTI0Uzh0SGdlLy9JS3YK",
       "endpoints": [
         "https://github.com/cSquirrel/Trackeroo/releases/latest/download/latest.json"
       ]
