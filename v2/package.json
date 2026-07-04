@@ -1,6 +1,6 @@
 {
   "name": "trackeroo-v2",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Trackeroo v2 — Tauri desktop shell wrapping the FastAPI backend as a sidecar",
   "scripts": {

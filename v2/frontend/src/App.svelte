@@ -5,6 +5,8 @@
   import BoardApp from "./lib/BoardApp.svelte";
   import ProjectPicker from "./lib/ProjectPicker.svelte";
   import Spinner from "./lib/Spinner.svelte";
+  import UpdateBanner from "./lib/UpdateBanner.svelte";
+  import { updater } from "./lib/update.svelte";
 
   type LaunchTarget = { path: string | null; error: string | null };
 
@@ -34,6 +36,10 @@
   }
 
   onMount(async () => {
+    // Best-effort silent update check on launch — reachable regardless of
+    // whether a project is open. Failures (offline, dev build) stay invisible.
+    void updater.runCheck(false);
+
     let target: LaunchTarget = { path: null, error: null };
     try {
       target = await invoke<LaunchTarget>("get_launch_target");
@@ -62,6 +68,8 @@
     phase = "picker";
   });
 </script>
+
+<UpdateBanner />
 
 {#if phase === "board"}
   <BoardApp />

@@ -6,6 +6,7 @@
   import SwimlanesView from "./SwimlanesView.svelte";
   import TaskDetailPanel from "./TaskDetailPanel.svelte";
   import { store } from "./store.svelte";
+  import { updater } from "./update.svelte";
 
   type View = "board" | "epics" | "swimlanes";
   let view = $state<View>("board");
@@ -91,6 +92,9 @@
       </button>
       <button class="open-other" onclick={openOtherProject} title="Open another project in a new window">
         Open project…
+      </button>
+      <button class="check-updates" onclick={() => updater.runCheck(true)} title="Check for a newer version of Trackeroo">
+        Check for updates
       </button>
     </nav>
 
@@ -187,6 +191,9 @@
   nav button.open-other {
     border: 1px solid #cbd5e1;
     margin-left: 0.6rem;
+  }
+  nav button.check-updates {
+    border: 1px solid #cbd5e1;
   }
   .author {
     display: flex;
