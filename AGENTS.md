@@ -49,9 +49,10 @@ and `v2/CLAUDE.md` — this section only records the non-obvious cloud gotchas.
   be on `sys.path`). It also needs `v2/backend/data/` to exist first: the test
   fixture opens `sqlite:///./data/test.db` before the app auto-creates that dir, so
   run `mkdir -p v2/backend/data` once.
-- **MCP tests**: `pytest tests_spawn/` runs with no Docker (it spawns the real
-  backend from `backend/.venv`; needs `lsof`). The `tests/` suite is a Docker
-  Compose integration suite that references a `docker-compose.yml` which no longer
-  exists in the repo (the v1 web-app stack was retired) — it cannot run here.
+- **MCP tests**: both suites spawn the real backend from `backend/.venv` (no
+  Docker). `pytest` from `v2/mcp` runs everything; `tests/` is the tool-level
+  integration suite (session-scoped backend) and `tests_spawn/` covers
+  `backend_spawn.py` (per-test backends; needs `lsof`). Create `backend/.venv`
+  first (the update script does this).
 - **libEGL / DRI3 warnings** when launching the app are harmless (software GL
   fallback); the WebKit window still renders.

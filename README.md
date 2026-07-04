@@ -4,7 +4,7 @@
 
 Packaged as a native macOS desktop app (Tauri) — the target use case is a single user on a single machine, with no remote access ever needed. See [`v2/README.md`](v2/README.md) for the product overview, quickstart, and how to build/run it.
 
-> This repo previously held a Docker/web-app implementation (`v1/`) alongside this one; it's been retired since the target use case is single-machine, not self-hosted-server. `v2/` — historically the second implementation, now the only one — is left named as-is rather than flattened to the repo root.
+> The app lives under `v2/` (historically the second implementation, now the only one) — left named as-is rather than flattened to the repo root.
 
 ## Worktrees
 
