@@ -53,6 +53,14 @@ and `v2/CLAUDE.md` — this section only records the non-obvious cloud gotchas.
   Docker). `pytest` from `v2/mcp` runs everything; `tests/` is the tool-level
   integration suite (session-scoped backend) and `tests_spawn/` covers
   `backend_spawn.py` (per-test backends; needs `lsof`). Create `backend/.venv`
-  first (the update script does this).
+  first (the update script does this). `pytest` itself is a test-only dep in
+  `mcp/tests/requirements.txt` (not `mcp/requirements.txt`), so the `mcp/.venv`
+  must have both installed — the update script does this.
+- **`npm ci` works at the `v2/` root but NOT in `frontend/`.** The committed
+  `frontend/package-lock.json` was generated on macOS and omits Linux-only
+  optional deps (e.g. `@emnapi/runtime`), so `npm ci` there fails with "Missing:
+  ... from lock file". Use `npm install` for the frontend; the update script runs
+  `npm install --no-package-lock` so the platform resolution doesn't dirty the
+  committed lockfile.
 - **libEGL / DRI3 warnings** when launching the app are harmless (software GL
   fallback); the WebKit window still renders.
