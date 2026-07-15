@@ -1,74 +1,115 @@
-# TRA-6 — Multi-project single-instance support: implementation plan
+# TRA-6 — Multi-project single-instance: implementation plan
 
-## Background
+## Vision
 
-Today Trackeroo is a desktop app where every project window is its own OS process
-running its own backend instance. This is the right model for the "vault-style"
-macOS app, but it makes a second use case awkward: running Trackeroo as a headless
-system service (e.g. systemd) on a developer workstation or server, where a single
-long-running API process should serve several projects simultaneously, multiple MCP
-clients (one per code repo) connect to the same service each targeting different
-projects, and a browser tab lets you switch between project boards without spawning
-new processes.
+The **backend is the centerpiece.** One long-running Trackeroo service manages
+all your projects. Any number of MCP clients connect to it — each scoped to a
+different project — and any number of browser/desktop UI clients connect to it
+and can switch between projects freely.
 
-This document is the design and implementation plan for that second mode.  The
-desktop app model is entirely unchanged — no regressions, no forced migrations.
+```
+                    ┌──────────────────────────────────────┐
+                    │   trackeroo-backend  (system service) │
+                    │                                      │
+                    │  Project registry                    │
+                    │  ┌────┬──────────────┬─────────────┐ │
+                    │  │ id │ name         │ folder       │ │
+                    │  │  1 │ "api-server" │ ~/repos/api  │ │
+                    │  │  2 │ "mobile-app" │ ~/repos/mob  │ │
+                    │  │  3 │ "infra"      │ ~/repos/infra│ │
+                    │  └────┴──────────────┴─────────────┘ │
+                    │                                      │
+                    │  Per-project SQLite DB (existing      │
+                    │  .trackeroo/ layout, no migration)    │
+                    └──────────────────────────────────────┘
+                         ▲            ▲            ▲
+           ┌─────────────┤            │            ├─────────────┐
+           │             │            │            │             │
+    MCP client     MCP client     Browser UI   Desktop app  MCP client
+  (Claude Code,  (Claude Code,   (project     (Tauri,       (any IDE,
+   project 1)     project 2)      switcher)    project 3)    project N)
+```
+
+The desktop Tauri app stays fully functional and is just one of many clients —
+it uses the backend exactly as it does today (spawning its own per-project
+instance when running standalone).
 
 ---
 
 ## Goals
 
-1. A single FastAPI backend process can serve N project databases.
-2. MCP clients can target a specific project on a shared server via
-   `TRACKEROO_PROJECT_ID`.
-3. The browser-based UI can list registered projects and switch between them.
-4. The service is deployable as a systemd unit with zero extra dependencies.
-5. The existing per-process desktop app workflow continues to work exactly as
-   before.
+1. A single FastAPI backend process manages N projects, each in its own SQLite
+   database.
+2. MCP clients target a project by ID on the shared service — no per-project
+   backend processes needed.
+3. The web UI lists all registered projects and lets you switch between boards
+   without spawning new processes.
+4. Registering a project is a single API call (give the service a folder path).
+5. The service is self-contained: optionally serves the built frontend itself,
+   so there is nothing to deploy beyond the backend process.
+6. Existing single-project and desktop-app deployments continue to work
+   unchanged.
 
 ---
 
-## Non-goals (out of scope for this feature)
+## Non-goals (out of scope for now)
 
-- Authentication / authorization (single-user local service only for now).
-- A GUI or TUI for managing the service process itself.
-- Breaking changes to the existing REST API.
-- Merging project databases (projects stay in separate SQLite files).
+- Authentication / multi-user access control.
+- Breaking changes to the existing single-project REST API.
+- Forcing per-project database migration or merging databases.
 
 ---
 
-## Architecture overview
+## Architecture
+
+### Data layer: per-project SQLite, dynamic engine cache
+
+Each project's data lives in `<folder>/.trackeroo/trackeroo.db` — exactly the
+existing layout. Nothing moves. A new `engine_for(db_path)` function
+maintains a cached `dict[str, Engine]` so the service keeps open connections to
+each project's DB without recreating engines on every request.
+
+### Project registry
+
+A lightweight JSON file (`~/.trackeroo/registry.json` by default; configurable
+via `TRACKEROO_REGISTRY_PATH`) stores the list of registered projects:
+
+```json
+[
+  { "id": 1, "name": "api-server", "folder": "/home/alice/repos/api-server" },
+  { "id": 2, "name": "mobile-app", "folder": "/home/alice/repos/mobile-app" }
+]
+```
+
+On startup, if `TRACKEROO_PROJECTS_DIR` is set, the service also auto-scans
+that directory for project folders and registers any new ones.
+
+### API routing: project-scoped prefix
+
+Every existing route (`/api/tasks`, `/api/epics`, etc.) is also available under
+`/api/projects/{id}/tasks`, `/api/projects/{id}/epics`, etc. A FastAPI
+dependency resolves the project ID → DB session transparently. The old flat
+routes continue to work for single-project deployments pointing at `DATABASE_URL`.
+
+### MCP: service-first configuration
+
+The primary MCP config for the service scenario is two env vars:
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│  trackeroo-backend  (single long-running process)              │
-│                                                                │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │  Project registry  (~/.trackeroo/registry.json)          │ │
-│  │  id │ name        │ folder_path                          │ │
-│  │  1  │ "api-server"│ /home/alice/projects/api-server      │ │
-│  │  2  │ "mobile"    │ /home/alice/projects/mobile-app      │ │
-│  └──────────────────────────────────────────────────────────┘ │
-│                                                                │
-│  Engine cache  { db_path → SQLAlchemy Engine }                 │
-│                                                                │
-│  Routes                                                        │
-│    Legacy (single-project, backward-compat):                   │
-│      GET  /api/project        → default DATABASE_URL project   │
-│      GET  /api/tasks          → same                           │
-│      ...                                                       │
-│    New (multi-project):                                        │
-│      GET  /api/projects                → list registry         │
-│      POST /api/projects                → register a project    │
-│      DELETE /api/projects/{id}         → unregister            │
-│      GET  /api/projects/{id}/project   → project config        │
-│      GET  /api/projects/{id}/tasks     → tasks for project id  │
-│      ...  (all existing sub-routes mirrored)                   │
-└────────────────────────────────────────────────────────────────┘
-         ▲                     ▲                    ▲
-  MCP (project 1)       MCP (project 2)       Browser UI
-  TRACKEROO_PROJECT_ID=1  TRACKEROO_PROJECT_ID=2   (project switcher)
+TRACKEROO_API_URL=http://localhost:8787   # URL of the central service
+TRACKEROO_PROJECT_ID=2                    # which project this client targets
 ```
+
+The existing `TRACKEROO_PROJECT_PATH` auto-spawn mode continues to work for
+people who don't run the service.
+
+### UI: project list is the home screen
+
+When the frontend connects to a multi-project service (detected via the
+presence of the `GET /api/projects` endpoint returning multiple entries, or via
+a `window.__TAURI__` absence check), it shows a project-list home screen
+instead of the single-project picker. Clicking a project loads that project's
+board. A "← Projects" button in the board top-bar returns to the list.
 
 ---
 
@@ -76,34 +117,27 @@ desktop app model is entirely unchanged — no regressions, no forced migrations
 
 ---
 
-### Phase 1 — Backend: multi-project session factory + project registry API
+### Phase 1 — Backend: multi-project API
 
-**Goal:** A single backend process can serve any number of registered projects.
-All existing routes are unchanged.
+This phase makes the backend service-ready. The frontend and MCP are unchanged.
 
 #### 1.1  Dynamic engine factory — `app/database.py`
-
-Add `engine_for(db_path: str) -> Engine` next to the existing module-level
-`engine`.  It maintains an LRU-bounded `dict[str, Engine]` (cap: 64 entries —
-more than enough for local use).  Each entry is created lazily on first access
-and reuses all existing `connect_args` / pragma hooks.
 
 ```python
 _engine_cache: dict[str, Engine] = {}
 
 def engine_for(db_path: str) -> Engine:
-    """Return (or create-and-cache) an Engine for an absolute SQLite path."""
     key = str(Path(db_path).resolve())
     if key not in _engine_cache:
-        url = f"sqlite:///{key}"
-        eng = create_engine(url, connect_args={"check_same_thread": False})
-        # attach same WAL + busy_timeout pragmas as the default engine
-        _attach_sqlite_pragmas(eng)
+        eng = create_engine(
+            f"sqlite:///{key}",
+            connect_args={"check_same_thread": False},
+        )
+        _attach_sqlite_pragmas(eng)   # same WAL + busy_timeout as today
         _engine_cache[key] = eng
     return _engine_cache[key]
 
-def session_for(db_path: str) -> Generator[Session, None, None]:
-    """FastAPI dependency: open a session against a specific project DB."""
+def get_db_for(db_path: str) -> Generator[Session, None, None]:
     factory = sessionmaker(bind=engine_for(db_path), ...)
     db = factory()
     try:
@@ -112,332 +146,323 @@ def session_for(db_path: str) -> Generator[Session, None, None]:
         db.close()
 ```
 
-#### 1.2  Project registry — `app/project_registry.py` (new file)
-
-An in-memory + JSON-persisted list of registered projects.
+#### 1.2  Project registry — `app/project_registry.py` (new)
 
 ```python
 @dataclass
 class RegisteredProject:
     id: int
     name: str
-    folder: str   # absolute path to the project folder
+    folder: str          # absolute path
+    db_path: str         # folder/.trackeroo/trackeroo.db
 ```
 
-Public API:
-- `load_registry(path: Path)` — read from JSON; called at startup
-- `save_registry(path: Path)` — write to JSON; called on every mutation
-- `list_projects() -> list[RegisteredProject]`
-- `add_project(folder: str, name: str | None) -> RegisteredProject` — raises if
-  `.trackeroo/trackeroo.db` does not exist in `folder`
-- `remove_project(id: int)` — unregisters (does NOT delete data)
-- `get_project(id: int) -> RegisteredProject | None`
+Functions:
+- `load(path)` / `save(path)` — JSON round-trip
+- `list_projects()`, `get_project(id)`, `get_project_by_folder(folder)`
+- `add_project(folder, name=None)` — validates DB exists; auto-names from folder
+- `remove_project(id)` — unregisters only; does not touch data
+- `scan_dir(root)` — auto-registers all sub-folders that contain a project DB
 
-Registry location: `TRACKEROO_REGISTRY_PATH` env var (default:
-`~/.trackeroo/registry.json`).  If `TRACKEROO_PROJECTS_DIR` is set, the
-backend also auto-scans that directory for subfolders containing
-`.trackeroo/trackeroo.db` and registers any not already in the registry.
+Startup sequence in `app/main.py` lifespan:
+1. Load registry from `TRACKEROO_REGISTRY_PATH`
+2. If `TRACKEROO_PROJECTS_DIR` set → `scan_dir()` and merge
+3. For each registered project: run bootstrap (idempotent `create_all` +
+   schema migrations) so the service is ready to serve without any warm-up
+   call
 
-#### 1.3  Project registry router — `app/routers/registry.py` (new file)
+#### 1.3  Registry router — `app/routers/registry.py` (new)
 
 ```
-GET  /api/projects           → list[RegisteredProjectOut]
-POST /api/projects           → RegisteredProjectOut
-     body: { folder: str, name?: str }
-DELETE /api/projects/{id}    → 204 No Content
+GET  /api/projects              → list[RegisteredProjectOut]
+POST /api/projects              → RegisteredProjectOut
+     body: { folder, name? }
+DELETE /api/projects/{id}       → 204
 ```
 
-#### 1.4  Per-project route prefix — `app/main.py`
+`POST /api/projects` validates that `.trackeroo/trackeroo.db` exists (or creates
+it with `create=true` query param) before registering.
 
-Mount a second copy of the existing routers under
-`/api/projects/{project_id}` using a dependency that:
-
-1. Looks up `project_id` in the registry → gets `db_path`
-2. Bootstraps the DB if not yet bootstrapped (idempotent `create_all` +
-   migrations)
-3. Returns a `Session` for that DB via `session_for(db_path)`
+#### 1.4  Project-scoped sub-routes — `app/main.py`
 
 ```python
-# In main.py
-from fastapi import APIRouter, Depends, Path, HTTPException
-
-def get_project_db(project_id: int = Path(...)) -> Generator[Session, None, None]:
+def get_project_session(
+    project_id: int = Path(...),
+    registry: ProjectRegistry = Depends(get_registry),
+) -> Generator[Session, None, None]:
     proj = registry.get_project(project_id)
-    if proj is None:
-        raise HTTPException(404, f"Project {project_id} not found")
-    ensure_bootstrapped(proj.db_path)
-    yield from session_for(proj.db_path)
+    if not proj:
+        raise HTTPException(404, f"Project {project_id} not registered")
+    yield from get_db_for(proj.db_path)
 
-project_router = APIRouter(prefix="/api/projects/{project_id}")
-project_router.include_router(project.router,    dependencies=[Depends(get_project_db)])
-project_router.include_router(swimlanes.router,  dependencies=[Depends(get_project_db)])
-project_router.include_router(epics.router,      dependencies=[Depends(get_project_db)])
-project_router.include_router(tasks.router,      dependencies=[Depends(get_project_db)])
-
-app.include_router(project_router)
+scoped = APIRouter(prefix="/api/projects/{project_id}")
+scoped.include_router(project.router)
+scoped.include_router(swimlanes.router)
+scoped.include_router(epics.router)
+scoped.include_router(tasks.router)
+# Inject the project-scoped DB dependency for all routes in this router:
+app.include_router(scoped, dependencies=[Depends(get_project_session)])
 ```
 
-> **Backward-compat note:** The existing module-level `get_db` (used by the
-> existing `/api/...` routes) continues to reference the `DATABASE_URL`
-> engine.  None of those routes change.
+Each existing router already accepts `db: Session = Depends(get_db)`.  The
+`get_project_session` dependency *overrides* `get_db` for the scoped router,
+so no router internals change.
 
-**Test coverage:**
-- Unit tests for `engine_for` (same path → same object, different paths →
-  different objects)
-- Unit tests for `project_registry` (add, list, remove, auto-scan)
-- Integration tests for `GET /api/projects`, `POST /api/projects`,
-  `DELETE /api/projects/{id}`
-- Integration tests for `GET /api/projects/1/tasks`, etc. (duplicate of
-  existing task tests but via the new prefix)
+**Test additions:**
+- `test_project_registry.py` — unit tests for all registry operations
+- `test_registry_router.py` — integration tests for `GET/POST/DELETE /api/projects`
+- `test_multi_project_routes.py` — integration tests confirming data isolation
+  (project 1 tasks invisible to project 2 routes and vice versa)
 
 ---
 
-### Phase 2 — MCP: project-aware tools
+### Phase 2 — MCP: service-mode connection
 
-**Goal:** MCP clients can connect to a central server and operate on a specific
-project by ID, without needing `TRACKEROO_PROJECT_PATH` at all.
-
-#### 2.1  `TRACKEROO_PROJECT_ID` env var — `mcp/server.py`
+#### 2.1  `TRACKEROO_PROJECT_ID` — `mcp/server.py`
 
 ```python
 _PROJECT_ID = os.environ.get("TRACKEROO_PROJECT_ID")
-```
 
-When `_PROJECT_ID` is set (and `_EXPLICIT_API_URL` is also set — pointing at
-the central server), all request paths are prefixed with
-`/projects/{_PROJECT_ID}`:
-
-```python
 def _api_path(path: str) -> str:
+    """Prefix with /projects/{id} when connecting to a central service."""
     if _PROJECT_ID:
         return f"/projects/{_PROJECT_ID}{path}"
     return path
 ```
 
-`_request(method, path, ...)` calls `_api_path(path)` before building the URL.
+`_request()` calls `_api_path(path)` before building the URL.  All 15 existing
+tools require no other changes.
 
-#### 2.2  `list_projects` tool — `mcp/server.py`
+Priority / override table:
 
-Available when no `TRACKEROO_PROJECT_ID` is set (discovery mode):
+| Env vars set | Behaviour |
+|---|---|
+| `TRACKEROO_API_URL` + `TRACKEROO_PROJECT_ID` | Hit central service, project-scoped |
+| `TRACKEROO_API_URL` only | Hit that URL directly (existing override mode) |
+| `TRACKEROO_PROJECT_PATH` only | Discover-or-spawn per-project backend (existing) |
+| Neither | Fall back to `http://localhost:8000` (existing default) |
+
+#### 2.2  `list_projects` tool
 
 ```python
 @mcp.tool()
 def list_projects() -> str:
-    """List all projects registered on this Trackeroo server.
+    """List all projects registered on this Trackeroo service.
 
-    Use this when TRACKEROO_PROJECT_ID is not set to discover which project IDs
-    are available, then set TRACKEROO_PROJECT_ID in your MCP config to target
-    one.
+    Use this to discover available project IDs before setting
+    TRACKEROO_PROJECT_ID in your MCP config, or to check what projects
+    an agent can see.
     """
     return _fmt(_request("GET", "/api/projects"))
 ```
 
-#### 2.3  Documentation update — `mcp/README.md`
+#### 2.3  `mcp/README.md` — new "Service mode" section
 
-Add a "Central server mode" section explaining:
-- How to start a central server
-- How to register projects (`POST /api/projects`)
-- The two MCP config patterns:
-  ```json
-  // Per-folder (existing, spawns its own backend):
-  { "env": { "TRACKEROO_PROJECT_PATH": "/path/to/project" } }
+Shows both config patterns side-by-side:
 
-  // Central server (new):
-  { "env": { "TRACKEROO_API_URL": "http://localhost:8787",
-             "TRACKEROO_PROJECT_ID": "1" } }
-  ```
-
-**Test coverage:**
-- Unit test for `_api_path` with and without `_PROJECT_ID`
-- Integration test exercising `list_projects` tool against a multi-project
-  backend fixture
-
----
-
-### Phase 3 — Frontend: project switcher
-
-**Goal:** A browser can open the Trackeroo UI, see a list of projects, switch
-between them without spawning new windows.
-
-#### 3.1  Project-scoped API client — `frontend/src/lib/api.ts`
-
-Add:
-```typescript
-let currentProjectId: number | null = null;
-
-export function setProjectId(id: number | null): void {
-  currentProjectId = id;
+```json
+// Option A — per-folder (existing; spawns backend on demand):
+{
+  "trackeroo": {
+    "command": "…/trackeroo-mcp",
+    "env": { "TRACKEROO_PROJECT_PATH": "/path/to/my-project" }
+  }
 }
 
-function projectPath(path: string): string {
-  return currentProjectId !== null
-    ? `/projects/${currentProjectId}${path}`
-    : path;
+// Option B — central service (new; no per-project processes):
+{
+  "trackeroo-api": {
+    "command": "…/trackeroo-mcp",
+    "env": {
+      "TRACKEROO_API_URL": "http://localhost:8787",
+      "TRACKEROO_PROJECT_ID": "1"
+    }
+  }
 }
 ```
 
-The `request()` function calls `projectPath(path)` before constructing the URL.
+Multiple MCP servers in one config, each with a different `TRACKEROO_PROJECT_ID`,
+is the recommended pattern for multi-repo setups.
 
-Existing call-sites (`getProject()`, `listTasks()`, etc.) require no changes —
-they still pass relative paths like `/tasks`; the prefix is injected
-transparently.
+**Test additions:**
+- Unit test for `_api_path` with and without `_PROJECT_ID`
+- Integration test for `list_projects` against a two-project fixture
 
-Add new function:
+---
+
+### Phase 3 — Frontend: project list and switcher
+
+#### 3.1  Project-scoped API — `frontend/src/lib/api.ts`
+
+```typescript
+let _projectId: number | null = null;
+
+export function setProjectId(id: number | null) { _projectId = id; }
+
+function projectPath(p: string) {
+  return _projectId !== null ? `/projects/${_projectId}${p}` : p;
+}
+// request() wraps every path through projectPath() — all existing callers unchanged
+```
+
+New export:
 ```typescript
 export const listRegisteredProjects = () =>
   request<RegisteredProject[]>("GET", "/projects");
 ```
 
-#### 3.2  Store — `frontend/src/lib/store.svelte.ts`
+#### 3.2  Store — `src/lib/store.svelte.ts`
 
-Add `currentProjectId: number | null` to the store state.  `setCurrentProject(id)`
-updates it, calls `setProjectId(id)` on the API client, and calls `loadAll()`.
+Add `currentProjectId: number | null`.  `switchProject(id)` updates it, calls
+`setProjectId(id)`, and triggers `loadAll()`.  `clearProject()` resets state
+and returns to the project list.
 
 #### 3.3  `ProjectList.svelte` (new component)
 
-Displays the list from `GET /api/projects`.  Each entry shows project name and
-folder.  Clicking one calls `store.setCurrentProject(id)` → board loads.
-Includes a "Register new project" mini-form (folder path + optional name).
+- Calls `listRegisteredProjects()` on mount
+- Renders each project as a card: name, folder path, "Open board →" action
+- "Register project" form: folder path input → calls `POST /api/projects`
+- Refreshes list on registration
 
-#### 3.4  Service-mode detection — `frontend/src/App.svelte`
-
-Tauri injects `window.__TAURI__` into the webview.  In a plain browser it is
-absent.  Use this to choose the right startup path:
+#### 3.4  Mode detection and routing — `src/App.svelte`
 
 ```typescript
-const isTauri = !!window.__TAURI__;
+// Tauri injects window.__TAURI_INTERNALS__; its absence means plain browser
+const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 ```
 
-- **Tauri (desktop app):** existing path unchanged — resolve CLI launch target,
-  show picker, open project, show board.
-- **Browser (service mode):** skip the picker; show `ProjectList.svelte`.
-  Once a project is chosen, show `BoardApp.svelte` with a "← Projects" button
-  that returns to the list.
+- **Tauri (desktop app):** existing startup path — resolve CLI arg, picker,
+  board.  Zero change.
+- **Browser (service mode):** skip picker; mount `ProjectList`. User picks a
+  project → `store.switchProject(id)` → board loads.  Board top-bar shows "←
+  Projects" instead of "Open project…"; clicking it calls `store.clearProject()`
+  and returns to `ProjectList`.
 
 #### 3.5  `BoardApp.svelte`
 
-In service mode, show a "← Projects" button in the top-bar that calls
-`store.clearProject()` (resets `currentProjectId`, unloads the board, shows
-`ProjectList` again).  In Tauri mode the button is unchanged (it spawns a new
-window as before).
+Accept `serviceMode: boolean` prop (false by default for Tauri compat).  In
+service mode, replace the "Open project…" button with "← Projects".
 
-**Test coverage:**
-- Unit tests for `projectPath()` with and without a project ID set
-- Component test for `ProjectList` (renders project names, calls
-  `setCurrentProject` on click)
+**Test additions:**
+- Unit tests for `projectPath()` with / without project ID
+- `ProjectList` component test: renders names, calls `switchProject` on click,
+  POST on register
 
 ---
 
-### Phase 4 — Service mode: deployment and docs
+### Phase 4 — Service packaging and docs
 
-**Goal:** Someone can set up Trackeroo as a persistent system service in under
-10 minutes.
+#### 4.1  Built-in frontend serving — `app/main.py`
 
-#### 4.1  `docs/service-mode.md` (new file)
+```python
+if dist := os.environ.get("TRACKEROO_SERVE_FRONTEND"):
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=dist, html=True))
+```
 
-Covers:
-1. Starting the backend manually (the same `uvicorn` / `run_sidecar.py` command)
-2. Registering projects via `curl` / `POST /api/projects`
-3. Pointing MCP clients at the service
-4. Accessing the web UI (serve `frontend/dist/` with any static file server, or
-   add a static-files mount to the FastAPI app)
+Set `TRACKEROO_SERVE_FRONTEND=/path/to/frontend/dist` and the single backend
+process serves both the API and the UI at the same port.
+
+#### 4.2  `docs/service-mode.md` (new)
+
+End-to-end guide:
+1. Start the service (`uvicorn` / `run_sidecar.py` + env vars)
+2. Register projects (`curl -X POST /api/projects`)
+3. Configure MCP clients (Option A vs Option B patterns)
+4. Open the web UI in a browser
 5. Systemd deployment
 
-#### 4.2  `docs/service/trackeroo.service` (new file)
+#### 4.3  `docs/service/trackeroo.service` (new)
 
-Example systemd unit:
 ```ini
 [Unit]
-Description=Trackeroo task-board backend
+Description=Trackeroo task-board service
 After=network.target
 
 [Service]
 Type=simple
-User=alice
-Environment="DATABASE_URL=sqlite:////home/alice/.trackeroo/default.db"
-Environment="TRACKEROO_REGISTRY_PATH=/home/alice/.trackeroo/registry.json"
-Environment="TRACKEROO_PORT=8787"
-ExecStart=/home/alice/.venv/bin/python /home/alice/trackeroo/v2/backend/run_sidecar.py
+User=%i
+Environment=TRACKEROO_REGISTRY_PATH=%h/.trackeroo/registry.json
+Environment=TRACKEROO_PROJECTS_DIR=%h/repos
+Environment=TRACKEROO_PORT=8787
+Environment=TRACKEROO_SERVE_FRONTEND=/opt/trackeroo/frontend/dist
+ExecStart=/opt/trackeroo/.venv/bin/python /opt/trackeroo/run_sidecar.py
 Restart=on-failure
+RestartSec=5
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
 ```
-
-#### 4.3  Optional: static frontend serving — `backend/app/main.py`
-
-If `TRACKEROO_SERVE_FRONTEND` env var is set to a directory path, mount the
-built frontend as a static site at `/`:
-
-```python
-from fastapi.staticfiles import StaticFiles
-if frontend_dir := os.environ.get("TRACKEROO_SERVE_FRONTEND"):
-    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
-```
-
-This lets the single backend process serve both the API and the UI.
 
 ---
 
-## Key design decisions
+## Design decisions
 
-| Question | Decision | Rationale |
+| Decision point | Choice | Why |
 |---|---|---|
-| Per-project DB or merged DB? | Separate files (existing layout) | Projects stay portable; no DB migration |
-| Registry storage | `~/.trackeroo/registry.json` | Zero extra dependency; human-readable |
-| New API prefix | `/api/projects/{id}/...` alongside existing `/api/...` | Existing deployments untouched |
-| MCP routing | `TRACKEROO_PROJECT_ID` + `TRACKEROO_API_URL` | One env var change per MCP client |
-| Frontend mode switch | `window.__TAURI__` detection | Desktop app entirely unchanged |
-| Auth | None (out of scope) | Local single-user service |
+| One DB vs per-project DBs | Per-project SQLite files | Portable projects; no forced migration |
+| Registry storage | JSON file | Zero extra dependency; human-readable and vcs-friendly |
+| API compat | New `/api/projects/{id}/...` prefix; old `/api/...` unchanged | Zero breakage |
+| MCP primary config | `TRACKEROO_API_URL` + `TRACKEROO_PROJECT_ID` | Clean; one env var per project per MCP client |
+| Frontend mode switch | `window.__TAURI_INTERNALS__` presence | Desktop app unchanged; no feature flag needed |
+| Frontend serving | Optional via `TRACKEROO_SERVE_FRONTEND` | No nginx required for simple deployments |
 
 ---
 
-## Files changed (summary)
+## Files touched (summary)
 
-### Backend (`v2/backend/`)
+### `v2/backend/`
 | File | Change |
 |---|---|
-| `app/database.py` | Add `engine_for()`, `session_for()` |
-| `app/main.py` | Mount project-scoped router; load registry; optional static files |
-| `app/project_registry.py` | **New** — registry dataclass + JSON persistence |
-| `app/routers/registry.py` | **New** — `GET/POST/DELETE /api/projects` |
-| `app/dependencies.py` | **New** — `get_project_db` FastAPI dependency |
-| `tests/` | New tests for registry + multi-project routes |
+| `app/database.py` | + `engine_for()`, `get_db_for()` |
+| `app/main.py` | + registry startup, project-scoped router, optional static files |
+| `app/project_registry.py` | **new** |
+| `app/routers/registry.py` | **new** — `/api/projects` CRUD |
+| `app/dependencies.py` | **new** — `get_project_session` dependency |
+| `tests/test_project_registry.py` | **new** |
+| `tests/test_registry_router.py` | **new** |
+| `tests/test_multi_project_routes.py` | **new** |
 
-### MCP (`v2/mcp/`)
+### `v2/mcp/`
 | File | Change |
 |---|---|
-| `server.py` | `TRACKEROO_PROJECT_ID` support; `list_projects` tool |
-| `README.md` | Central server mode docs |
-| `tests/` | Multi-project integration test |
+| `server.py` | + `TRACKEROO_PROJECT_ID`, `_api_path()`, `list_projects` tool |
+| `README.md` | + service-mode config section |
+| `tests/test_service_mode.py` | **new** |
 
-### Frontend (`v2/frontend/`)
+### `v2/frontend/`
 | File | Change |
 |---|---|
-| `src/lib/api.ts` | `setProjectId()`; `projectPath()`; `listRegisteredProjects()` |
-| `src/lib/store.svelte.ts` | `currentProjectId`; `setCurrentProject()` |
-| `src/App.svelte` | Service-mode branch |
-| `src/lib/BoardApp.svelte` | "← Projects" button in service mode |
-| `src/lib/ProjectList.svelte` | **New** — project list + switcher |
+| `src/lib/api.ts` | + `setProjectId()`, `projectPath()`, `listRegisteredProjects()` |
+| `src/lib/store.svelte.ts` | + `currentProjectId`, `switchProject()`, `clearProject()` |
+| `src/App.svelte` | + service-mode branch |
+| `src/lib/BoardApp.svelte` | + `serviceMode` prop, "← Projects" button |
+| `src/lib/ProjectList.svelte` | **new** |
 
-### Docs (`v2/docs/`)
+### `v2/docs/`
 | File | Change |
 |---|---|
-| `service-mode.md` | **New** — deployment guide |
-| `service/trackeroo.service` | **New** — systemd example |
+| `service-mode.md` | **new** |
+| `service/trackeroo.service` | **new** |
 
 ---
 
-## Open questions before implementation begins
+## Open questions
 
-1. **Static frontend serving:** Is bundling frontend serving into the backend
-   the right approach, or should we document a separate nginx/caddy setup?
-2. **Registry path default:** `~/.trackeroo/registry.json` assumes a user-home
-   path on the service host.  Should it default to a path relative to the
-   backend's working directory instead?
-3. **Auto-scan scope:** If `TRACKEROO_PROJECTS_DIR` is set, should the backend
-   auto-register new projects that appear while running (inotify watch), or
-   only on startup?
-4. **Frontend build:** The `tauri dev` flow builds the frontend inside the
-   Tauri context.  For service mode, `npm run build` in `frontend/` produces
-   a standalone `dist/`.  Should the README document this explicitly?
+1. **New-project creation via service:** Should `POST /api/projects` accept a
+   `create: true` flag to initialise a fresh DB in a new folder (mirroring the
+   desktop picker's "New project" action)?  Or is registration-of-existing-folders-only
+   the right scope for now?
+
+2. **Registry path default:** `~/.trackeroo/registry.json` works fine on a
+   developer machine.  For a system-wide service, something under `/var/lib`
+   or relative to the install path may be more appropriate — should the default
+   be configurable via the systemd unit without env var gymnastics?
+
+3. **Auto-scan at runtime:** `TRACKEROO_PROJECTS_DIR` scan runs only at
+   startup today.  Should the service watch for new sub-folders (inotify) so a
+   newly cloned repo is auto-registered without a service restart?
+
+4. **`TRACKEROO_PROJECT_ID` as a path alias:** Should the MCP server also
+   accept a folder path as a project identifier (resolved via `GET
+   /api/projects?folder=...`) so users don't need to know the numeric ID?
