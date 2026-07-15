@@ -1,0 +1,9 @@
+{
+  "install": "cd v2 && npm ci && npm --prefix frontend install --no-package-lock && python3 -m venv backend/.venv && backend/.venv/bin/pip install -r backend/requirements.txt && python3 -m venv mcp/.venv && mcp/.venv/bin/pip install -r mcp/requirements.txt -r mcp/tests/requirements.txt && mkdir -p backend/data src-tauri/binaries && TRIPLE=$(rustc -vV | sed -n 's/host: //p') && touch \"src-tauri/binaries/trackeroo-backend-$TRIPLE\" \"src-tauri/binaries/trackeroo-mcp-$TRIPLE\" && chmod +x \"src-tauri/binaries/trackeroo-backend-$TRIPLE\" \"src-tauri/binaries/trackeroo-mcp-$TRIPLE\"",
+  "terminals": [
+    {
+      "name": "vite-dev",
+      "command": "cd v2/frontend && npm run dev"
+    }
+  ]
+}
