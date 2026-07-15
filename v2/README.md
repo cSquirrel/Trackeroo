@@ -128,6 +128,36 @@ docs/        openapi.json (generated, canonical REST contract) + api-contract.md
 - **Unsigned build**: the `.app`/`.dmg` are ad-hoc signed only (no Apple Developer signing identity configured). macOS Gatekeeper will warn on first launch — right-click → Open, or allow via System Settings → Privacy & Security.
 - **Sidecar binary naming**: must exactly match Tauri's `<name>-<target-triple>` convention — currently `trackeroo-backend-aarch64-apple-darwin` and `trackeroo-mcp-aarch64-apple-darwin` for Apple Silicon. See `src-tauri/tauri.conf.json`'s `bundle.externalBin`.
 
+## Releases & auto-updates
+
+The app updates itself in place using the [Tauri updater plugin](https://v2.tauri.app/plugin/updater/). Stable releases are cut from `main` and published as GitHub Releases; installed apps check that channel, download the new signed bundle, install it, and relaunch.
+
+### How it works at runtime
+
+- On launch (and via a manual **"Check for updates"** button in the picker footer and the board top bar) the app fetches the manifest at `https://github.com/cSquirrel/Trackeroo/releases/latest/download/latest.json`. `/latest/download/` always resolves to the newest *published, non-prerelease* Release.
+- If a newer version is offered, a banner appears. Accepting downloads the `.app.tar.gz`, verifies its **minisign** signature against the `pubkey` baked into `tauri.conf.json` (`plugins.updater`), swaps the app bundle, and relaunches (via the `process` plugin). On macOS the whole `.app` is replaced, so the bundled `trackeroo-backend`/`trackeroo-mcp` sidecars update atomically with the shell.
+- Updates are inert under `tauri dev` (there is no installed bundle to replace) — the frontend detects a dev build and skips silently.
+
+### Publishing a release
+
+1. Bump the version in lockstep: `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `package.json` (the root `v2/package.json`). `tauri.conf.json` is the source of truth the tag/manifest derive from.
+2. Merge `develop` → `main` and push a tag `vX.Y.Z` on `main`.
+3. `.github/workflows/release.yml` runs on an Apple-Silicon runner: it builds the two PyInstaller sidecars, then runs `tauri-action`, which builds + signs the bundle, generates `latest.json`, and attaches everything to a **draft** GitHub Release.
+4. Review the draft, then **publish** it — publishing is what makes `/latest/download/` (and therefore the updater) point at the new version.
+
+### One-time signing-key setup (required for CI)
+
+Updater artifacts are signed with a minisign key. The **public** key is committed in `tauri.conf.json` (`plugins.updater.pubkey`); the **private** key must be provided to CI as repository secrets, or the `tauri-action` build fails to sign:
+
+- `TAURI_SIGNING_PRIVATE_KEY` — the private key contents (generate with `npm run tauri signer generate`).
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — its password (empty string if the key has none).
+
+Set these under **GitHub → Settings → Secrets and variables → Actions**. Keep the private key out of the repo. If you rotate the key, regenerate it, update `pubkey` in `tauri.conf.json`, and re-set the secrets — apps signed with the old key can only update once you ship a build carrying the new `pubkey`.
+
+### Bootstrap caveat
+
+Builds before `0.2.0` have no `pubkey` baked in and cannot auto-update. Users on such a build (e.g. the original `0.1.0`) must install `0.2.0`+ **manually once** (download the `.dmg`); auto-update works for every release after that. Apple Developer ID signing + notarization is not yet configured (see the "Unsigned build" gotcha) — the updater mechanism works regardless, but a notarized build is a recommended follow-up so macOS Gatekeeper doesn't warn on the updated app.
+
 ## Versioning
 
-See the repo-root `README.md`.
+See the repo-root `README.md` for the branch model (`develop` for active work, `main` for stable releases).

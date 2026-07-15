@@ -1,8 +1,10 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { getVersion } from "@tauri-apps/api/app";
   import { open } from "@tauri-apps/plugin-dialog";
   import { onMount } from "svelte";
   import Spinner from "./Spinner.svelte";
+  import { updater } from "./update.svelte";
 
   type RecentProject = { path: string; name: string };
 
@@ -22,9 +24,15 @@
   let busy = $state(false);
   let busyLabel = $state("Opening project…");
   let error = $state<string | null>(null);
+  let version = $state<string>("");
 
   onMount(async () => {
     error = initialError;
+    try {
+      version = await getVersion();
+    } catch {
+      version = "";
+    }
     try {
       recent = await invoke<RecentProject[]>("list_recent_projects");
     } catch {
@@ -137,6 +145,13 @@
         </ul>
       {/if}
     </section>
+
+    <footer class="foot">
+      {#if version}<span class="ver">Trackeroo v{version}</span> · {/if}
+      <button class="link" onclick={() => updater.runCheck(true)}>
+        Check for updates
+      </button>
+    </footer>
 
     {#if busy}
       <div class="overlay">
@@ -262,6 +277,28 @@
   .empty {
     color: #94a3b8;
     font-size: 0.85rem;
+  }
+  .foot {
+    margin-top: 1.4rem;
+    padding-top: 0.9rem;
+    border-top: 1px solid #f1f5f9;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.8rem;
+  }
+  .ver {
+    color: #64748b;
+  }
+  button.link {
+    background: none;
+    border: none;
+    color: #64748b;
+    text-decoration: underline;
+    font-size: 0.8rem;
+    padding: 0;
+  }
+  button.link:hover:not(:disabled) {
+    color: #4f46e5;
   }
   .err {
     background: #fee2e2;

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Trackeroo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.trackeroo.desktop",
   "build": {
     "beforeDevCommand": "npm --prefix frontend run dev",
@@ -25,6 +25,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "externalBin": ["binaries/trackeroo-backend", "binaries/trackeroo-mcp"],
     "icon": [
       "icons/32x32.png",
@@ -33,5 +34,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQxRDE0RkRCRUREQjcwMjMKUldRamNOdnQyMC9SUVFtVlFvV0cyZThTazlWWkFMc1BFZGo0dmYwZ0s5RTI0Uzh0SGdlLy9JS3YK",
+      "endpoints": [
+        "https://github.com/cSquirrel/Trackeroo/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

@@ -1,0 +1,85 @@
+name: Release
+
+# Stable releases are cut from `main`: push a semver tag (e.g. v0.2.0) that
+# points at a commit on `main` and this builds the signed macOS bundle, its
+# updater artifacts, and a `latest.json` manifest, then attaches them to a
+# draft GitHub Release for review before publishing.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    # Apple Silicon runner → aarch64-apple-darwin, the only target Trackeroo
+    # ships today. Add a matrix entry (and a macos-13 x86_64 job) here when
+    # Intel support is wanted.
+    runs-on: macos-14
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The backend and MCP servers ship as PyInstaller sidecars that
+      # `tauri build` does NOT build automatically (see v2/README.md). They must
+      # exist at src-tauri/binaries/<name>-<target-triple> before bundling.
+      - name: Build backend sidecar
+        working-directory: v2/backend
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt pyinstaller
+          .venv/bin/pyinstaller --onefile \
+            --name trackeroo-backend-aarch64-apple-darwin \
+            --collect-submodules uvicorn --hidden-import uvloop \
+            --hidden-import httptools --hidden-import websockets \
+            --paths . run_sidecar.py
+          mkdir -p ../src-tauri/binaries
+          cp dist/trackeroo-backend-aarch64-apple-darwin ../src-tauri/binaries/
+
+      - name: Build MCP sidecar
+        working-directory: v2/mcp
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt pyinstaller
+          .venv/bin/pyinstaller --onefile \
+            --name trackeroo-mcp-aarch64-apple-darwin \
+            --collect-submodules mcp.server \
+            --paths . server.py
+          cp dist/trackeroo-mcp-aarch64-apple-darwin ../src-tauri/binaries/
+
+      - name: Build, sign & release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Minisign key that signs the updater artifacts; the matching public
+          # key is baked into v2/src-tauri/tauri.conf.json (plugins.updater.pubkey).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: v2
+          # Derives the tag/version from v2/src-tauri/tauri.conf.json.
+          tagName: v__VERSION__
+          releaseName: "Trackeroo v__VERSION__"
+          releaseBody: "See the assets to download and install this version."
+          # Draft so a human reviews before publishing. Publishing is what makes
+          # the /releases/latest/download/latest.json endpoint point here.
+          releaseDraft: true
+          prerelease: false
+          # tauri-action generates and uploads latest.json for the updater
+          # (uploadUpdaterJson defaults to true).

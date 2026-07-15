@@ -56,3 +56,23 @@ and `v2/CLAUDE.md` — this section only records the non-obvious cloud gotchas.
   first (the update script does this).
 - **libEGL / DRI3 warnings** when launching the app are harmless (software GL
   fallback); the WebKit window still renders.
+- **Testing the auto-updater on Linux needs a tmpfs.** The updater
+  (`tauri-plugin-updater`) check/download/verify path works fine on the VM, but
+  Tauri's **Linux AppImage installer** aborts with `temp directory is not on the
+  same mount point as the AppImage`: it compares `st_dev` of the running app
+  against the temp dir, and this container's **overlayfs/FUSE** does not report a
+  consistent `st_dev` (the AppImage FUSE mount also runs in its own mount
+  namespace, so in-process device IDs never match a writable temp dir). This is a
+  Linux-path/container artifact only — the **macOS target uses a different
+  install path with no such check**, so it doesn't affect the product. To drive a
+  full detect→download→install→relaunch E2E locally: build a release with a
+  **local** updater endpoint (`plugins.updater.endpoints` →
+  `http://localhost:<port>/latest.json`, plus `"dangerousInsecureTransportProtocol":
+  true` — revert both before committing), then run the **raw release binary**
+  (`src-tauri/target/release/trackeroo`, not the AppImage) from a real **tmpfs**
+  with `TMPDIR` pointing into it, so `st_dev` is consistent:
+  `sudo mount -t tmpfs tmpfs /tmp/tfs && cp src-tauri/target/release/trackeroo /tmp/tfs/ && TMPDIR=/tmp/tfs DISPLAY=:1 /tmp/tfs/trackeroo`.
+  Build a higher-version bundle, sign it (`TAURI_SIGNING_PRIVATE_KEY[_PASSWORD]`),
+  and serve its `.AppImage` + a hand-written `latest.json` (platform key
+  `linux-x86_64`, `signature` = contents of the `.AppImage.sig`) with
+  `python3 -m http.server <port>`. See `v2/README.md` → "Releases & auto-updates".
